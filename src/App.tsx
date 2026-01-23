@@ -746,22 +746,40 @@ function App() {
         targetFolder = activeMenu.split('folder_')[1];
     }
     
-    const newPapers: Paper[] = Array.from(files).map((file, i) => ({
-        id: Date.now() + i,
-        title: file.name.replace('.pdf', ''),
-        author: "Local Upload",
-        year: "2024",
-        type: "PDF",
-        folderId: targetFolder,
-        tags: ["Uploaded"],
-        abstract: "This document was infiltrated from the local cognitive drive.",
-        fileUrl: URL.createObjectURL(file)
-    }));
+    Array.from(files).forEach((file, i) => {
+        const isPdf = file.type === 'application/pdf';
+        const isText = file.type.includes('text') || file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.json');
 
-    setPapers(prev => [...newPapers, ...prev]);
-    if (newPapers.length > 0) {
-        setSelectedPaper(newPapers[0]);
-    }
+        const newPaper: Paper = {
+            id: Date.now() + i,
+            title: file.name.replace(/\.[^/.]+$/, ""),
+            author: "Local Upload",
+            year: "2024",
+            type: isPdf ? "PDF" : "FILE",
+            folderId: targetFolder,
+            tags: ["Uploaded"],
+            abstract: "This document was infiltrated from the local cognitive drive.",
+            content: "", // Will be filled if text
+            fileUrl: ""  // Will be filled if PDF
+        };
+
+        if (isText) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target?.result as string;
+                setPapers(prev => [{ ...newPaper, content: text, type: "TEXT" }, ...prev]);
+            };
+            reader.readAsText(file);
+        } else {
+            // Assume PDF or binary - Create Blob URL
+            const url = URL.createObjectURL(file);
+            setPapers(prev => [{ ...newPaper, fileUrl: url, type: isPdf ? "PDF" : "BINARY" }, ...prev]);
+        }
+    });
+    
+    // Switch view to see new files (might take a moment for FileReader)
+    if (targetFolder) setActiveMenu(`folder_${targetFolder}`);
+    else setActiveMenu('all');
   };
 
   const handleDeletePaper = (id: number, e: React.MouseEvent) => {
