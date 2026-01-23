@@ -86,6 +86,10 @@ async def scrape_arxiv(url: str):
             "url": url
         }
 
+class MindHackRequest(BaseModel):
+    text: str
+    mode: str  # "translate" or "decipher"
+
 # --- API Endpoints ---
 
 @app.get("/")
@@ -97,6 +101,43 @@ def get_papers():
     with Session(engine) as session:
         papers = session.exec(select(Paper)).all()
         return papers
+
+@app.post("/api/mind_hack")
+async def mind_hack(request: MindHackRequest):
+    """
+    Skill 3: Real-time Text Analysis (Mind Hack)
+    """
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    
+    # SYSTEM PROMPTS
+    if request.mode == "translate":
+        system_prompt = "你是一个精通多语言的怪盗翻译官。请将用户的文字翻译成中文。信达雅，保留原文的神韵。直接输出译文。"
+    else: # decipher
+        system_prompt = "你是怪盗团的战术分析师 (Oracle)。请一针见血地分析这段文字的潜台词、核心隐喻和真实意图。用中文回答，风格犀利、冷静、洞察真相。分点回答 (1. 核心... 2. 潜台词... 3. 结论)。"
+
+    if not api_key or api_key == "mock-key":
+        # DYNAMIC MOCK FALLBACK
+        await asyncio.sleep(1.5)
+        if request.mode == "translate":
+            return {"result": f"【模拟翻译】\n(后端未配置API Key，显示模拟数据)\n\n原文：{request.text[:20]}...\n\n译文：这段文字描述了认知世界的某种底层逻辑，似乎与集体潜意识有关。"}
+        else:
+            return {"result": f"【模拟分析】\n(后端未配置API Key，显示模拟数据)\n\n针对\"{request.text[:10]}...\"的分析：\n\n1. 核心隐喻：文字表面平淡，实则暗藏杀机。\n2. 潜台词：作者试图掩盖某种真相。\n3. 结论：建议进一步调查来源。"}
+
+    # REAL CALL
+    try:
+        response = await deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.text},
+            ],
+            stream=False
+        )
+        return {"result": response.choices[0].message.content}
+    except Exception as e:
+        # Fallback if API fails
+        print(f"DeepSeek Error: {e}")
+        return {"result": f"【连接中断】\n无法连接到元宇宙核心 (DeepSeek API Error)。\n\n错误信息: {str(e)}"}
 
 @app.post("/api/steal", response_model=PaperRead)
 async def steal_heart(request: StealRequest):

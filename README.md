@@ -10,79 +10,71 @@
 
 ## 🚀 Features (Cognitive Abilities)
 
-### 👁️ Activate Third Eye (AI Analysis)
-- **Intelligent Tagging**: Automatically scans paper titles and abstracts to detect domains (CV, NLP, RL, NetSec).
-- **Truth Reveal**: Analyzes the "Shadow" (Problem), "Persona" (Solution), and "Weakness" (Flaw) of any paper (Simulated AI).
-- **Visuals**: Results appear as styled "Calling Cards".
+### 🧠 Mind Hack (Contextual AI)
+- **Select-to-Analyze**: Highlight ANY text inside a PDF or document.
+- **Phantom Menu**: A jagged menu appears instantly above your selection.
+- **Decipher**: DeepSeek AI analyzes the "subtext", "metaphors", and "hidden intent" of the selected text (Chinese output).
+- **Translate**: Instantly translates complex academic jargon into human-readable Chinese.
+- **Draggable Window**: Analysis results appear in a floating, scrollable window that you can move aside to keep reading.
 
-### 🎭 Infiltration Protocol (Import & Manage)
-- **Bulk Upload**: Infiltrate local PDFs directly into the browser.
-- **Steal Heart**: Add papers via URL/DOI (Simulation).
+### 👁️ Activate Third Eye (Auto-Tagging)
+- **Intelligent Tagging**: Automatically scans paper titles and abstracts to detect domains (CV, NLP, RL, NetSec).
+- **Truth Reveal**: Analyzes the "Shadow" (Problem), "Persona" (Solution), and "Weakness" (Flaw) of any paper.
+
+### 📜 Immersive Reader (Infinite Scroll)
+- **Native PDF Engine**: Renders uploaded PDFs directly in the app using `react-pdf`.
+- **Infinite Scroll**: Read long papers seamlessly without clicking "Next Page".
+- **Text Layer**: Full text selection support, enabling the "Mind Hack" on standard PDFs.
+
+### 🎭 Infiltration Protocol
+- **Bulk Upload**: Infiltrate local PDFs (`.pdf`) or cognitive data (`.txt`, `.md`, `.json`) directly.
 - **Safe Rooms**: Organize your intel into custom Folders (Missions).
 - **Burn Evidence**: Delete unwanted papers or folders with a click.
-
-### 🎨 Immersive Reading Mode
-- **Sliding Viewer**: Read papers in a full-screen, slide-up overlay.
-- **Native PDF Support**: Renders uploaded PDFs directly within the P5-styled shell.
-
-### 💾 Cognitive Persistence
-- **Auto-Save**: All changes (Tags, Folders, Papers) are instantly anchored to `localStorage`. The Palace remembers everything even after a refresh.
 
 ---
 
 ## 🛠️ Tech Stack (The Toolset)
 
-- **Core**: React 19 + TypeScript + Vite
-- **Styling**: Tailwind CSS v4 + Custom Fonts (`Fjalla One`, `Inter`)
-- **Animation**: Framer Motion (Spring Physics)
-- **Icons**: Lucide React
-- **Backend (Optional)**: Python FastAPI (Included in `backend/` folder for future expansion)
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind v4
+- **Visuals**: Framer Motion (Spring Physics) + Custom P5 Fonts
+- **PDF Engine**: React-PDF (Mozilla PDF.js)
+- **Backend**: Python FastAPI (Handles DeepSeek API calls)
+- **Persistence**: `localStorage` (Metadata) + Blob URLs (Session Files)
 
 ---
 
 ## 🕹️ Quick Start (Begin Heist)
 
-1.  **Clone the Palace:**
+### Option A: The Ignition Key (Windows One-Click)
+1.  Locate `start_phantom.bat` in the root folder.
+2.  **Double-click it**.
+3.  The system will launch both the Brain (Backend) and the Face (Frontend) automatically.
+
+### Option B: Manual Infiltration
+
+1.  **Start the Brain (Backend):**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/phantom-lib.git
-    cd phantom-lib
+    cd backend
+    pip install -r requirements.txt
+    uvicorn main:app --reload
     ```
 
-2.  **Install Dependencies:**
+2.  **Start the Face (Frontend):**
     ```bash
+    # Open a new terminal
     npm install
-    ```
-
-3.  **Start Infiltration (Dev Server):**
-    ```bash
     npm run dev
     ```
 
-4.  **Open the Metaverse:**
+3.  **Access the Palace:**
     Navigate to `http://localhost:5173`.
 
 ---
 
-## 📂 Project Structure
+## ⚠️ Cognitive Notes
 
-```
-phantom-lib/
-├── src/
-│   ├── App.tsx          # The Core Logic (Brain)
-│   ├── index.css        # The Visual Style (Skin)
-│   └── main.tsx         # Entry Point
-├── backend/             # (Optional) Python Backend
-│   ├── main.py          # FastAPI Router
-│   └── models.py        # SQLModel Schemas
-└── ...
-```
-
----
-
-## ⚠️ Notes
-
-- **PDF Persistence**: Due to browser security protections on `localStorage`, raw PDF files (Blobs) uploaded via "Bulk Import" **will not persist after a page refresh**. Only metadata (titles, tags) is saved. For permanent file storage, the Python backend must be activated.
-- **AI Simulation**: The current "Third Eye" uses regex-based heuristic analysis for immediate feedback. Real DeepSeek API integration code is available in the `backend/` folder.
+-   **DeepSeek Key**: To enable real AI analysis, create a `.env` file in `phantom-lib/` with `DEEPSEEK_API_KEY=your_key_here`. If missing, the system uses a built-in simulation mode.
+-   **File Persistence**: Due to browser security, **PDF files uploaded via Bulk Import will disappear if you refresh the page**. Only the metadata (titles, tags, notes) persists.
 
 ---
 

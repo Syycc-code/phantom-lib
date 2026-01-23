@@ -29,10 +29,11 @@ import {
   Sparkles,
   MessageSquare,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Move
 } from 'lucide-react';
 
-// --- PDF WORKER SETUP (CRITICAL) ---
+// --- PDF WORKER SETUP ---
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,
@@ -141,7 +142,8 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
     const handleMouseUp = () => {
         const selection = window.getSelection();
         if (!selection || selection.toString().trim().length === 0) {
-            setSelectionMenu(null);
+            // Only hide menu if we are NOT clicking inside the menu or result window
+            // This is handled by the useEffect below
             return;
         }
 
@@ -150,7 +152,7 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
         
         // Ensure menu stays within bounds
         const x = Math.min(Math.max(rect.left + (rect.width / 2), 100), window.innerWidth - 100);
-        const y = Math.max(rect.top - 50, 80); // Keep below header
+        const y = Math.max(rect.top - 50, 80); 
 
         setSelectionMenu({
             visible: true,
@@ -160,27 +162,51 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
         });
     };
 
-    const handleAction = (type: 'DECIPHER' | 'TRANSLATE') => {
+    const handleAction = async (type: 'DECIPHER' | 'TRANSLATE') => {
         if (!selectionMenu) return;
         setSelectionMenu(null); 
         setLoadingAnalysis(true); 
         setAnalysisResult({ visible: true, type, content: "" });
 
-        // Simulate AI Delay
-        setTimeout(() => {
-            setLoadingAnalysis(false);
-            const result = type === 'DECIPHER' 
-                ? `The author implies that "${selectionMenu.text.substring(0, 20)}..." is actually a metaphor for societal control mechanisms.`
-                : `[JAPANESE]: "${selectionMenu.text.substring(0, 20)}..." \n(Translation: The cognitive world requires strict discipline...)`;
+        try {
+            // CALL REAL BACKEND
+            const response = await fetch('/api/mind_hack', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: selectionMenu.text,
+                    mode: type.toLowerCase()
+                })
+            });
+
+            if (!response.ok) throw new Error("Cognitive Link Failed");
             
-            setAnalysisResult({ visible: true, type, content: result });
-        }, 1500);
+            const data = await response.json();
+            setAnalysisResult({ visible: true, type, content: data.result });
+
+        } catch (e) {
+            console.error(e);
+            // FALLBACK SIMULATION IF BACKEND OFFLINE
+            setTimeout(() => {
+                const selectedText = selectionMenu.text.length > 50 ? selectionMenu.text.substring(0, 50) + "..." : selectionMenu.text;
+                let result = "";
+                if (type === 'DECIPHER') {
+                    result = `【离线模式】\n(无法连接到后端，显示模拟数据)\n\n针对 "${selectedText}"：\n\n1. 核心隐喻：[数据丢失]\n2. 潜台词：请检查 backend 服务器是否运行。\n3. 结论：Uvicorn 未启动。`;
+                } else {
+                    result = `【离线翻译】\n"${selectedText}"\n\n(请启动 python backend 以获取实时翻译)`;
+                }
+                setAnalysisResult({ visible: true, type, content: result });
+            }, 1000);
+        } finally {
+            setLoadingAnalysis(false);
+        }
     };
 
-    // Close menu if clicking elsewhere
+    // Close menu if clicking elsewhere (but not on the window!)
     useEffect(() => {
         const handleClick = (e: MouseEvent) => {
-             if (selectionMenu?.visible && !(e.target as HTMLElement).closest('.phantom-menu')) {
+             const target = e.target as HTMLElement;
+             if (selectionMenu?.visible && !target.closest('.phantom-menu')) {
                  setSelectionMenu(null);
              }
         };
@@ -210,13 +236,6 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                     </h2>
                 </div>
                 <div className="flex items-center space-x-4 z-10">
-                    {paper.fileUrl && (
-                        <div className="flex items-center space-x-2 bg-black/80 px-4 py-1 rounded-full text-xs font-mono">
-                             <button onClick={() => setPageNumber(Math.max(1, pageNumber - 1))} disabled={pageNumber <= 1}><ChevronLeft size={16}/></button>
-                             <span>PAGE {pageNumber} OF {numPages}</span>
-                             <button onClick={() => setPageNumber(Math.min(numPages, pageNumber + 1))} disabled={pageNumber >= numPages}><ChevronRight size={16}/></button>
-                        </div>
-                    )}
                     <button onClick={onClose} className="bg-black text-white p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 border-white">
                         <X size={24} />
                     </button>
@@ -226,20 +245,28 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
             {/* Content Body */}
             <div className="flex-1 bg-zinc-900 relative overflow-auto flex justify-center p-8 custom-scrollbar" onMouseUp={handleMouseUp}>
                 {paper.fileUrl ? (
-                    /* PDF RENDERER */
-                    <div className="shadow-2xl selection:bg-phantom-red selection:text-black">
+                    /* PDF RENDERER (Infinite Scroll) */
+                    <div className="shadow-2xl selection:bg-phantom-red selection:text-black flex flex-col items-center pb-20">
                         <Document
                             file={paper.fileUrl}
                             onLoadSuccess={onDocumentLoadSuccess}
-                            className="flex justify-center"
+                            className="flex flex-col items-center gap-4"
                         >
-                            <Page 
-                                pageNumber={pageNumber} 
-                                renderTextLayer={true} 
-                                renderAnnotationLayer={true}
-                                scale={1.2}
-                                className="bg-white"
-                            />
+                            {Array.from(new Array(numPages), (el, index) => (
+                                <Page 
+                                    key={`page_${index + 1}`}
+                                    pageNumber={index + 1} 
+                                    renderTextLayer={true} 
+                                    renderAnnotationLayer={true}
+                                    scale={1.2}
+                                    className="bg-white shadow-xl"
+                                    loading={
+                                        <div className="h-[800px] w-[600px] bg-white flex items-center justify-center">
+                                            <BrainCircuit className="animate-spin text-phantom-red" />
+                                        </div>
+                                    }
+                                />
+                            ))}
                         </Document>
                     </div>
                 ) : (
@@ -254,7 +281,7 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                     </div>
                 )}
                 
-                {/* PHANTOM MENU (Floating) */}
+                {/* PHANTOM MENU (Floating Tooltip) */}
                 <AnimatePresence>
                     {selectionMenu && (
                         <motion.div
@@ -262,7 +289,7 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0, opacity: 0 }}
                             style={{ top: selectionMenu.y, left: selectionMenu.x }}
-                            className="phantom-menu fixed transform -translate-x-1/2 -translate-y-full z-50 flex space-x-2 pb-2 pointer-events-auto"
+                            className="phantom-menu fixed transform -translate-x-1/2 -translate-y-full z-[150] flex space-x-2 pb-2 pointer-events-auto"
                         >
                              <button 
                                 onClick={() => handleAction('DECIPHER')}
@@ -281,44 +308,59 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                     )}
                 </AnimatePresence>
 
-                {/* ANALYSIS RESULT MODAL */}
+                {/* DRAGGABLE ANALYSIS WINDOW (The Phantom Window) */}
                 <AnimatePresence>
                     {analysisResult && (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
-                            <motion.div
-                                initial={{ scale: 0.8, opacity: 0, rotate: -5 }}
-                                animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                                exit={{ scale: 0.8, opacity: 0 }}
-                                className="bg-white border-4 border-black p-6 w-[500px] shadow-[20px_20px_0px_rgba(0,0,0,0.8)] pointer-events-auto relative"
-                            >
-                                <button onClick={() => setAnalysisResult(null)} className="absolute top-2 right-2 text-black hover:text-red-600"><X size={24} /></button>
-                                
-                                <h3 className="font-p5 text-3xl bg-phantom-black text-phantom-yellow inline-block px-2 transform -skew-x-12 mb-4">
-                                    {loadingAnalysis ? "ESTABLISHING LINK..." : "COGNITION REVEALED"}
-                                </h3>
+                        <motion.div
+                            drag
+                            dragMomentum={false}
+                            initial={{ scale: 0.8, opacity: 0, y: 50 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.8, opacity: 0 }}
+                            className="fixed z-[200] top-1/3 left-1/3 w-[400px] bg-white border-4 border-black shadow-[16px_16px_0px_rgba(0,0,0,0.8)] cursor-move"
+                        >
+                            {/* Window Header */}
+                            <div className="bg-black p-2 flex justify-between items-center cursor-grab active:cursor-grabbing">
+                                <div className="flex items-center space-x-2">
+                                    <Move size={16} className="text-phantom-red" />
+                                    <span className="text-white font-p5 text-sm tracking-widest">
+                                        {loadingAnalysis ? "ESTABLISHING LINK..." : "PHANTOM ANALYSIS"}
+                                    </span>
+                                </div>
+                                <button 
+                                    onPointerDown={(e) => e.stopPropagation()} // Prevent drag on click
+                                    onClick={() => setAnalysisResult(null)} 
+                                    className="text-white hover:text-phantom-red"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
 
+                            {/* Window Body */}
+                            <div className="p-6 bg-zinc-100 cursor-default" onPointerDown={(e) => e.stopPropagation()}>
                                 {loadingAnalysis ? (
-                                    <div className="flex justify-center py-8">
-                                        <BrainCircuit className="w-16 h-16 animate-spin text-phantom-red" />
+                                    <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                                        <BrainCircuit className="w-12 h-12 animate-spin text-phantom-red" />
+                                        <span className="font-mono text-xs animate-pulse text-gray-500">DECRYPTING COGNITION...</span>
                                     </div>
                                 ) : (
-                                    <div className="font-mono text-sm text-black space-y-4">
-                                        <div className="bg-zinc-100 p-4 border-l-4 border-phantom-red italic">
-                                            "{selectionMenu?.text.substring(0, 60)}..."
-                                        </div>
-                                        <div className="flex items-start space-x-2">
-                                            <MessageSquare className="shrink-0 mt-1" size={18} />
-                                            <p className="font-bold text-lg leading-tight">
+                                    <div className="space-y-4">
+                                        {/* Result Text */}
+                                        <div className="max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
+                                            <div className="font-sans text-sm text-black leading-relaxed whitespace-pre-wrap font-medium">
                                                 {analysisResult.content}
-                                            </p>
+                                            </div>
                                         </div>
-                                        <div className="text-right text-[10px] uppercase tracking-widest text-gray-400">
-                                            Analysis via DeepSeek-V3 // Probability 99.8%
+                                        
+                                        {/* Footer */}
+                                        <div className="border-t-2 border-zinc-300 pt-2 flex justify-between items-center">
+                                            <span className="text-[10px] uppercase font-bold text-phantom-red">CONFIDENCE: 99.8%</span>
+                                            <MessageSquare size={14} className="text-gray-400" />
                                         </div>
                                     </div>
                                 )}
-                            </motion.div>
-                        </div>
+                            </div>
+                        </motion.div>
                     )}
                 </AnimatePresence>
             </div>
@@ -363,7 +405,7 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
             ARCHIVE
           </h1>
           <div className="bg-white text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-1 ml-2">
-            PHANTOM LIB V.1.5
+            PHANTOM LIB V.1.6
           </div>
       </div>
 
@@ -547,6 +589,7 @@ const MiddlePane = ({
                                             <span className="flex items-center"><Clock className="w-3 h-3 mr-1" /> {paper.year}</span>
                                             <span>:: {paper.author}</span>
                                         </div>
+                                        {/* Tag Preview */}
                                         {paper.tags.length > 0 && (
                                             <div className="mt-3 flex space-x-2">
                                                 {paper.tags.slice(0, 3).map(tag => (
