@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-phantom-red: #E60012;
+  --color-phantom-black: #111111;
+  --color-phantom-yellow: #FCEC0C;
+  --animate-spin-slow: spin 3s linear infinite;
+  
+  --font-p5: "Fjalla One", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+/* Import Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Fjalla+One&family=Inter:wght@400;700&display=swap');
+
+:root {
+  font-family: var(--font-body);
+  line-height: 1.5;
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #111111;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #111111;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+}
+
+/* --- THE PHANTOM AESTHETIC --- */
+
+/* 1. Halftone Background */
+.bg-halftone {
+  background-color: #111111;
+  background-image: radial-gradient(#333 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* 2. Jagged Clip Paths */
+.clip-path-slash {
+  clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);
+}
+
+.clip-path-jagged {
+  clip-path: polygon(
+    0 0, 
+    100% 0, 
+    95% 40%, 
+    100% 100%, 
+    0 100%, 
+    5% 60%
+  );
+}
+
+.clip-path-menu-active {
+  clip-path: polygon(5% 0, 100% 0, 95% 100%, 0% 100%);
+}
+
+/* 3. Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #E60012; 
+  border: 1px solid #000;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #fff;
+}
