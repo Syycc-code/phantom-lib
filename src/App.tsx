@@ -21,7 +21,10 @@ import {
   Upload,
   Cpu,
   Eye,
-  Maximize2
+  Maximize2,
+  Languages,
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 
 // --- Types ---
@@ -39,10 +42,8 @@ interface Paper {
   folderId?: string;
   tags: string[];
   abstract: string;
-  // Content handling
-  content?: string; // For text/mock
-  fileUrl?: string; // For PDFs (Blob URL)
-  // AI Analysis
+  content?: string; 
+  fileUrl?: string; 
   shadow_problem?: string;
   persona_solution?: string;
   weakness_flaw?: string;
@@ -64,7 +65,20 @@ const INITIAL_PAPERS: Paper[] = [
     folderId: 'f1',
     tags: ["Cognition", "Reality"],
     abstract: "This paper explores the theoretical framework of cognitive psience, proposing that individual realities can be rewritten through the manipulation of the collective unconscious.",
-    content: "CHAPTER 1: THE COGNITIVE WORLD\n\nHuman cognition is not merely a passive reception of reality, but an active construction. The 'Metaverse' acts as a shared cognitive substrate...",
+    content: `CHAPTER 1: THE COGNITIVE WORLD
+
+Human cognition is not merely a passive reception of reality, but an active construction. The 'Metaverse' acts as a shared cognitive substrate where individual perceptions overlap. 
+
+When a subject perceives an object, they are not seeing the object itself, but their *cognition* of it. This distortion is what we call the "Palace". 
+
+By infiltrating this cognitive space, one can effectively rewrite the rules of the subject's reality. The ethical implications of such "heart changing" technologies remain a subject of fierce debate among the Phantom Thieves and the wider scientific community.
+
+The methodology involves three steps:
+1. Identification of the Distortion (The Treasure).
+2. Materialization of the Route (The Calling Card).
+3. Extraction of the Core (The Heist).
+
+Future work will focus on the stability of these cognitive alterations over time.`,
     shadow_problem: "Escapism from Reality",
     persona_solution: "Actualization of Will",
     weakness_flaw: "Subjective Tyranny"
@@ -106,8 +120,64 @@ const INITIAL_PAPERS: Paper[] = [
 
 // --- Components ---
 
-// READER OVERLAY (New Component)
+// READER OVERLAY
 const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }) => {
+    // SELECTION MENU STATE
+    const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; x: number; y: number; text: string } | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<{ visible: boolean; type: string; content: string } | null>(null);
+    const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+    
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    const handleMouseUp = () => {
+        const selection = window.getSelection();
+        if (!selection || selection.toString().trim().length === 0) {
+            setSelectionMenu(null);
+            return;
+        }
+
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // Calculate position relative to viewport (since overlay is fixed)
+        // We want the menu to appear slightly above the selection
+        setSelectionMenu({
+            visible: true,
+            x: rect.left + (rect.width / 2),
+            y: rect.top - 10,
+            text: selection.toString()
+        });
+    };
+
+    const handleAction = (type: 'DECIPHER' | 'TRANSLATE') => {
+        if (!selectionMenu) return;
+        setSelectionMenu(null); // Hide menu
+        setLoadingAnalysis(true); // Show loading
+        setAnalysisResult({ visible: true, type, content: "" }); // Open modal in loading state
+
+        // Simulate AI Delay
+        setTimeout(() => {
+            setLoadingAnalysis(false);
+            const result = type === 'DECIPHER' 
+                ? `The author implies that "${selectionMenu.text.substring(0, 20)}..." is actually a metaphor for societal control mechanisms.`
+                : `[JAPANESE]: "${selectionMenu.text.substring(0, 20)}..." \n(Translation: The cognitive world requires strict discipline...)`;
+            
+            setAnalysisResult({ visible: true, type, content: result });
+        }, 1500);
+    };
+
+    // Close menu if clicking elsewhere
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            // If click is NOT on the menu buttons...
+             if (selectionMenu?.visible && !(e.target as HTMLElement).closest('.phantom-menu')) {
+                 setSelectionMenu(null);
+             }
+        };
+        window.addEventListener('mousedown', handleClick);
+        return () => window.removeEventListener('mousedown', handleClick);
+    }, [selectionMenu]);
+
     return (
         <motion.div
             initial={{ y: "100%" }}
@@ -116,7 +186,7 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-[100] bg-[#050505] text-white flex flex-col"
         >
-            {/* Reader Header */}
+            {/* Header */}
             <div className="h-20 bg-phantom-red flex items-center justify-between px-8 shrink-0 relative overflow-hidden">
                 <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
                 <div className="z-10 flex items-center space-x-4">
@@ -125,36 +195,94 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                         READING // {paper.title}
                     </h2>
                 </div>
-                <button 
-                    onClick={onClose}
-                    className="z-10 bg-black text-white p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 border-white"
-                >
+                <button onClick={onClose} className="z-10 bg-black text-white p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 border-white">
                     <X size={24} />
                 </button>
             </div>
 
-            {/* Reader Body */}
-            <div className="flex-1 bg-zinc-900 relative overflow-hidden">
+            {/* Content Body */}
+            <div className="flex-1 bg-zinc-900 relative overflow-hidden" onMouseUp={handleMouseUp}>
                 {paper.fileUrl ? (
-                    /* PDF / Local File Viewer */
-                    <iframe 
-                        src={paper.fileUrl} 
-                        className="w-full h-full border-none" 
-                        title="PDF Viewer"
-                    />
+                    <iframe src={paper.fileUrl} className="w-full h-full border-none" title="PDF" />
                 ) : (
-                    /* Text / Mock Viewer */
-                    <div className="h-full overflow-y-auto p-20 max-w-5xl mx-auto custom-scrollbar">
-                        <div className="font-serif text-xl leading-loose text-zinc-300 whitespace-pre-wrap">
+                    <div ref={contentRef} className="h-full overflow-y-auto p-20 max-w-5xl mx-auto custom-scrollbar relative">
+                        <div className="font-serif text-xl leading-loose text-zinc-300 whitespace-pre-wrap selection:bg-phantom-red selection:text-black">
                             {paper.content || "NO CONTENT DATA AVAILABLE."}
                         </div>
-                        
-                        {/* Decorative Footer in Text Mode */}
                         <div className="mt-20 border-t-2 border-phantom-red pt-8 opacity-50 font-mono text-sm text-center">
                             END OF COGNITIVE STREAM
                         </div>
                     </div>
                 )}
+                
+                {/* PHANTOM MENU (Floating) */}
+                <AnimatePresence>
+                    {selectionMenu && (
+                        <motion.div
+                            initial={{ scale: 0, opacity: 0, y: 10 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            style={{ top: selectionMenu.y, left: selectionMenu.x }}
+                            className="phantom-menu fixed transform -translate-x-1/2 -translate-y-full z-50 flex space-x-2 pb-2 pointer-events-auto"
+                        >
+                             <button 
+                                onClick={() => handleAction('DECIPHER')}
+                                className="bg-black text-white px-4 py-2 font-p5 text-sm border-2 border-phantom-red shadow-[4px_4px_0px_#E60012] hover:scale-110 transition-transform flex items-center space-x-2"
+                             >
+                                <Sparkles size={14} className="text-phantom-yellow" /> <span>DECIPHER</span>
+                             </button>
+                             <button 
+                                onClick={() => handleAction('TRANSLATE')}
+                                className="bg-white text-black px-4 py-2 font-p5 text-sm border-2 border-black shadow-[4px_4px_0px_#000] hover:scale-110 transition-transform flex items-center space-x-2"
+                             >
+                                <Languages size={14} /> <span>TRANSLATE</span>
+                             </button>
+                             {/* Triangle Pointer */}
+                             <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-phantom-red"></div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* ANALYSIS RESULT MODAL */}
+                <AnimatePresence>
+                    {analysisResult && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+                            <motion.div
+                                initial={{ scale: 0.8, opacity: 0, rotate: -5 }}
+                                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="bg-white border-4 border-black p-6 w-[500px] shadow-[20px_20px_0px_rgba(0,0,0,0.8)] pointer-events-auto relative"
+                            >
+                                <button onClick={() => setAnalysisResult(null)} className="absolute top-2 right-2 text-black hover:text-red-600"><X size={24} /></button>
+                                
+                                <h3 className="font-p5 text-3xl bg-phantom-black text-phantom-yellow inline-block px-2 transform -skew-x-12 mb-4">
+                                    {loadingAnalysis ? "ESTABLISHING LINK..." : "COGNITION REVEALED"}
+                                </h3>
+
+                                {loadingAnalysis ? (
+                                    <div className="flex justify-center py-8">
+                                        <BrainCircuit className="w-16 h-16 animate-spin text-phantom-red" />
+                                    </div>
+                                ) : (
+                                    <div className="font-mono text-sm text-black space-y-4">
+                                        <div className="bg-zinc-100 p-4 border-l-4 border-phantom-red italic">
+                                            "{selectionMenu?.text.substring(0, 60)}..."
+                                        </div>
+                                        <div className="flex items-start space-x-2">
+                                            <MessageSquare className="shrink-0 mt-1" size={18} />
+                                            <p className="font-bold text-lg leading-tight">
+                                                {analysisResult.content}
+                                            </p>
+                                        </div>
+                                        <div className="text-right text-[10px] uppercase tracking-widest text-gray-400">
+                                            Analysis via DeepSeek-V3 // Probability 99.8%
+                                        </div>
+                                    </div>
+                                )}
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
             </div>
         </motion.div>
     );
@@ -197,7 +325,7 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
             ARCHIVE
           </h1>
           <div className="bg-white text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-1 ml-2">
-            PHANTOM LIB V.1.3
+            PHANTOM LIB V.1.4
           </div>
       </div>
 
@@ -381,7 +509,6 @@ const MiddlePane = ({
                                             <span className="flex items-center"><Clock className="w-3 h-3 mr-1" /> {paper.year}</span>
                                             <span>:: {paper.author}</span>
                                         </div>
-                                        {/* Tag Preview */}
                                         {paper.tags.length > 0 && (
                                             <div className="mt-3 flex space-x-2">
                                                 {paper.tags.slice(0, 3).map(tag => (
@@ -444,7 +571,7 @@ interface RightPaneProps {
     paper: Paper | null; 
     onClose: () => void; 
     onAnalyze: () => void;
-    onRead: () => void; // New Prop
+    onRead: () => void;
 }
 
 const RightPane = ({ paper, onClose, onAnalyze, onRead }: RightPaneProps) => {
@@ -484,15 +611,12 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead }: RightPaneProps) => {
 
           <div className="flex-1 p-10 bg-zinc-100 overflow-y-auto">
              <div className="space-y-8">
-                {/* Meta & Tags */}
                 <div className="border-b-2 border-black pb-6">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex space-x-4 font-mono text-sm">
                             <div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div>
                             <div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div>
                         </div>
-                        
-                        {/* READ BUTTON */}
                         <motion.button 
                             onClick={onRead}
                             whileHover={{ scale: 1.1, rotate: 3 }}
@@ -570,7 +694,6 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead }: RightPaneProps) => {
 // --- Main App ---
 
 function App() {
-  // PERSISTENCE LOGIC (Lazy Init)
   const [papers, setPapers] = useState<Paper[]>(() => {
       const saved = localStorage.getItem('phantom_papers');
       return saved ? JSON.parse(saved) : INITIAL_PAPERS;
@@ -581,7 +704,6 @@ function App() {
       return saved ? JSON.parse(saved) : INITIAL_FOLDERS;
   });
 
-  // PERSISTENCE EFFECT
   useEffect(() => {
       localStorage.setItem('phantom_papers', JSON.stringify(papers));
   }, [papers]);
@@ -633,7 +755,7 @@ function App() {
         folderId: targetFolder,
         tags: ["Uploaded"],
         abstract: "This document was infiltrated from the local cognitive drive.",
-        fileUrl: URL.createObjectURL(file) // CREATE BLOB URL
+        fileUrl: URL.createObjectURL(file)
     }));
 
     setPapers(prev => [...newPapers, ...prev]);
@@ -655,7 +777,6 @@ function App() {
   const handleThirdEye = () => {
     if (!selectedPaper) return;
     
-    // INTELLIGENT TAGGING LOGIC
     const content = (selectedPaper.title + " " + selectedPaper.abstract).toLowerCase();
     const aiTags = [];
     if (content.match(/vision|image|object|detection|segmentation/)) aiTags.push("CV");
@@ -696,7 +817,6 @@ function App() {
       }
   };
 
-  // READER TRIGGERS
   const handleRead = () => {
       if (selectedPaper) {
           setReadingPaper(selectedPaper);
@@ -735,7 +855,6 @@ function App() {
          />
       </div>
 
-      {/* READER OVERLAY (Global) */}
       <AnimatePresence>
         {isReading && readingPaper && (
             <ReaderOverlay 
