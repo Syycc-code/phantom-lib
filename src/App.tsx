@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import { 
   BookOpen, 
   Tag, 
@@ -24,8 +27,16 @@ import {
   Maximize2,
   Languages,
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
+
+// --- PDF WORKER SETUP (CRITICAL) ---
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 // --- Types ---
 interface FolderType {
@@ -71,14 +82,7 @@ Human cognition is not merely a passive reception of reality, but an active cons
 
 When a subject perceives an object, they are not seeing the object itself, but their *cognition* of it. This distortion is what we call the "Palace". 
 
-By infiltrating this cognitive space, one can effectively rewrite the rules of the subject's reality. The ethical implications of such "heart changing" technologies remain a subject of fierce debate among the Phantom Thieves and the wider scientific community.
-
-The methodology involves three steps:
-1. Identification of the Distortion (The Treasure).
-2. Materialization of the Route (The Calling Card).
-3. Extraction of the Core (The Heist).
-
-Future work will focus on the stability of these cognitive alterations over time.`,
+By infiltrating this cognitive space, one can effectively rewrite the rules of the subject's reality. The ethical implications of such "heart changing" technologies remain a subject of fierce debate among the Phantom Thieves and the wider scientific community.`,
     shadow_problem: "Escapism from Reality",
     persona_solution: "Actualization of Will",
     weakness_flaw: "Subjective Tyranny"
@@ -127,8 +131,13 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
     const [analysisResult, setAnalysisResult] = useState<{ visible: boolean; type: string; content: string } | null>(null);
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
     
+    // PDF STATE
+    const [numPages, setNumPages] = useState<number>(0);
+    const [pageNumber, setPageNumber] = useState<number>(1);
+    
     const contentRef = useRef<HTMLDivElement>(null);
 
+    // SELECTION LOGIC
     const handleMouseUp = () => {
         const selection = window.getSelection();
         if (!selection || selection.toString().trim().length === 0) {
@@ -139,21 +148,23 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         
-        // Calculate position relative to viewport (since overlay is fixed)
-        // We want the menu to appear slightly above the selection
+        // Ensure menu stays within bounds
+        const x = Math.min(Math.max(rect.left + (rect.width / 2), 100), window.innerWidth - 100);
+        const y = Math.max(rect.top - 50, 80); // Keep below header
+
         setSelectionMenu({
             visible: true,
-            x: rect.left + (rect.width / 2),
-            y: rect.top - 10,
+            x: x,
+            y: y,
             text: selection.toString()
         });
     };
 
     const handleAction = (type: 'DECIPHER' | 'TRANSLATE') => {
         if (!selectionMenu) return;
-        setSelectionMenu(null); // Hide menu
-        setLoadingAnalysis(true); // Show loading
-        setAnalysisResult({ visible: true, type, content: "" }); // Open modal in loading state
+        setSelectionMenu(null); 
+        setLoadingAnalysis(true); 
+        setAnalysisResult({ visible: true, type, content: "" });
 
         // Simulate AI Delay
         setTimeout(() => {
@@ -169,7 +180,6 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
     // Close menu if clicking elsewhere
     useEffect(() => {
         const handleClick = (e: MouseEvent) => {
-            // If click is NOT on the menu buttons...
              if (selectionMenu?.visible && !(e.target as HTMLElement).closest('.phantom-menu')) {
                  setSelectionMenu(null);
              }
@@ -177,6 +187,10 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
         window.addEventListener('mousedown', handleClick);
         return () => window.removeEventListener('mousedown', handleClick);
     }, [selectionMenu]);
+
+    function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
+        setNumPages(numPages);
+    }
 
     return (
         <motion.div
@@ -187,7 +201,7 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
             className="fixed inset-0 z-[100] bg-[#050505] text-white flex flex-col"
         >
             {/* Header */}
-            <div className="h-20 bg-phantom-red flex items-center justify-between px-8 shrink-0 relative overflow-hidden">
+            <div className="h-20 bg-phantom-red flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-lg z-20">
                 <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
                 <div className="z-10 flex items-center space-x-4">
                     <Maximize2 className="text-black" />
@@ -195,18 +209,43 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                         READING // {paper.title}
                     </h2>
                 </div>
-                <button onClick={onClose} className="z-10 bg-black text-white p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 border-white">
-                    <X size={24} />
-                </button>
+                <div className="flex items-center space-x-4 z-10">
+                    {paper.fileUrl && (
+                        <div className="flex items-center space-x-2 bg-black/80 px-4 py-1 rounded-full text-xs font-mono">
+                             <button onClick={() => setPageNumber(Math.max(1, pageNumber - 1))} disabled={pageNumber <= 1}><ChevronLeft size={16}/></button>
+                             <span>PAGE {pageNumber} OF {numPages}</span>
+                             <button onClick={() => setPageNumber(Math.min(numPages, pageNumber + 1))} disabled={pageNumber >= numPages}><ChevronRight size={16}/></button>
+                        </div>
+                    )}
+                    <button onClick={onClose} className="bg-black text-white p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 border-white">
+                        <X size={24} />
+                    </button>
+                </div>
             </div>
 
             {/* Content Body */}
-            <div className="flex-1 bg-zinc-900 relative overflow-hidden" onMouseUp={handleMouseUp}>
+            <div className="flex-1 bg-zinc-900 relative overflow-auto flex justify-center p-8 custom-scrollbar" onMouseUp={handleMouseUp}>
                 {paper.fileUrl ? (
-                    <iframe src={paper.fileUrl} className="w-full h-full border-none" title="PDF" />
+                    /* PDF RENDERER */
+                    <div className="shadow-2xl selection:bg-phantom-red selection:text-black">
+                        <Document
+                            file={paper.fileUrl}
+                            onLoadSuccess={onDocumentLoadSuccess}
+                            className="flex justify-center"
+                        >
+                            <Page 
+                                pageNumber={pageNumber} 
+                                renderTextLayer={true} 
+                                renderAnnotationLayer={true}
+                                scale={1.2}
+                                className="bg-white"
+                            />
+                        </Document>
+                    </div>
                 ) : (
-                    <div ref={contentRef} className="h-full overflow-y-auto p-20 max-w-5xl mx-auto custom-scrollbar relative">
-                        <div className="font-serif text-xl leading-loose text-zinc-300 whitespace-pre-wrap selection:bg-phantom-red selection:text-black">
+                    /* TEXT RENDERER */
+                    <div ref={contentRef} className="max-w-4xl w-full bg-zinc-800/50 p-12 min-h-full border-l-4 border-zinc-700 selection:bg-phantom-red selection:text-black">
+                        <div className="font-serif text-xl leading-loose text-zinc-300 whitespace-pre-wrap">
                             {paper.content || "NO CONTENT DATA AVAILABLE."}
                         </div>
                         <div className="mt-20 border-t-2 border-phantom-red pt-8 opacity-50 font-mono text-sm text-center">
@@ -237,7 +276,6 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                              >
                                 <Languages size={14} /> <span>TRANSLATE</span>
                              </button>
-                             {/* Triangle Pointer */}
                              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-phantom-red"></div>
                         </motion.div>
                     )}
@@ -246,7 +284,7 @@ const ReaderOverlay = ({ paper, onClose }: { paper: Paper, onClose: () => void }
                 {/* ANALYSIS RESULT MODAL */}
                 <AnimatePresence>
                     {analysisResult && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
                             <motion.div
                                 initial={{ scale: 0.8, opacity: 0, rotate: -5 }}
                                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
@@ -325,7 +363,7 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
             ARCHIVE
           </h1>
           <div className="bg-white text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-1 ml-2">
-            PHANTOM LIB V.1.4
+            PHANTOM LIB V.1.5
           </div>
       </div>
 
@@ -420,16 +458,16 @@ const MiddlePane = ({
     activeMenu, 
     papers, 
     selectedId, 
-    onSelect,
-    onAddPaper,
-    onDeletePaper
+    onSelect, 
+    onAddPaper, 
+    onDeletePaper 
 }: { 
     activeMenu: string, 
     papers: Paper[], 
     selectedId: number | null, 
-    onSelect: (p: Paper) => void,
-    onAddPaper: (url: string) => void,
-    onDeletePaper: (id: number, e: React.MouseEvent) => void
+    onSelect: (p: Paper) => void, 
+    onAddPaper: (url: string) => void, 
+    onDeletePaper: (id: number, e: React.MouseEvent) => void 
 }) => {
     const [inputUrl, setInputUrl] = useState('');
     const [isStealing, setIsStealing] = useState(false);
@@ -715,7 +753,6 @@ function App() {
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [activeMenu, setActiveMenu] = useState('all');
   
-  // READER STATE
   const [isReading, setIsReading] = useState(false);
   const [readingPaper, setReadingPaper] = useState<Paper | null>(null);
 
@@ -759,8 +796,8 @@ function App() {
             folderId: targetFolder,
             tags: ["Uploaded"],
             abstract: "This document was infiltrated from the local cognitive drive.",
-            content: "", // Will be filled if text
-            fileUrl: ""  // Will be filled if PDF
+            content: "", 
+            fileUrl: "" 
         };
 
         if (isText) {
@@ -771,13 +808,11 @@ function App() {
             };
             reader.readAsText(file);
         } else {
-            // Assume PDF or binary - Create Blob URL
             const url = URL.createObjectURL(file);
             setPapers(prev => [{ ...newPaper, fileUrl: url, type: isPdf ? "PDF" : "BINARY" }, ...prev]);
         }
     });
     
-    // Switch view to see new files (might take a moment for FileReader)
     if (targetFolder) setActiveMenu(`folder_${targetFolder}`);
     else setActiveMenu('all');
   };
