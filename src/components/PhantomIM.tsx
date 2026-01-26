@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Send, X, Smartphone, Loader2 } from 'lucide-react';
+import { Send, X, Smartphone, Loader2 } from 'lucide-react';
 
 interface ChatMessage {
     id: number;
@@ -38,6 +38,9 @@ export default function PhantomIM() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: userMsg.content })
             });
+            
+            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+            
             const data = await res.json();
             
             const oracleMsg: ChatMessage = { 
@@ -47,8 +50,9 @@ export default function PhantomIM() {
                 sources: data.sources 
             };
             setMessages(prev => [...prev, oracleMsg]);
-        } catch (e) {
-            setMessages(prev => [...prev, { id: Date.now()+1, role: 'oracle', content: "Network Error: Cognitive Signal Lost." }]);
+        } catch (e: any) {
+            console.error("PhantomIM Network Error:", e);
+            setMessages(prev => [...prev, { id: Date.now()+1, role: 'oracle', content: `Network Error: Cognitive Signal Lost.\n${e.message || "Check backend connection."}` }]);
         } finally {
             setIsTyping(false);
         }
