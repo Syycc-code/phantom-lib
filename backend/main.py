@@ -191,9 +191,8 @@ async def scan_document(file: UploadFile = File(...)):
         
         # 后台索引（不等待完成）
         if len(text) > 50:
-            loop = asyncio.get_event_loop()
-            loop.create_task(
-                loop.run_in_executor(executor, index_document, text, file.filename or "unknown")
+            asyncio.create_task(
+                asyncio.to_thread(index_document, text, file.filename or "unknown")
             )
 
         return {
@@ -373,18 +372,18 @@ async def chat_with_phantom_stream(request: ChatRequest):
 
 @app.post("/api/mind_hack")
 async def mind_hack(request: MindHackRequest):
-    # (Existing logic)
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    if request.mode == "translate":
-        system_prompt = "你是一个精通多语言的怪盗翻译官..."
-    else: 
-        system_prompt = "你是怪盗团的战术分析师..."
-        
-    if not api_key or api_key == "mock-key":
-        await asyncio.sleep(1)
-        return {"result": f"【模拟数据】 {request.text[:20]}..."}
-
     try:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        
+        if request.mode == "translate":
+            system_prompt = "你是一个精通多语言的怪盗翻译官，请将以下学术文本翻译成通俗易懂的中文。保留专业术语但增加解释。风格：优雅、精准。"
+        else: 
+            system_prompt = "你是怪盗团的战术分析师（Navi）。分析这段文本的'潜台词'（Subtext）、'作者意图'（Intent）和'核心论点'（Core）。用Persona 5的风格（黑客、怪盗术语）回答。"
+            
+        if not api_key or api_key == "mock-key":
+            await asyncio.sleep(1)
+            return {"result": f"【模拟回复 - 离线模式】\n请在 .env 文件中配置 DEEPSEEK_API_KEY。\n\n目标文本: {request.text[:50]}..."}
+
         response = await deepseek_client.chat.completions.create(
             model="deepseek-chat",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": request.text}],
@@ -392,7 +391,8 @@ async def mind_hack(request: MindHackRequest):
         )
         return {"result": response.choices[0].message.content}
     except Exception as e:
-        return {"result": f"Error: {e}"}
+        print(f"[MindHack Error] {e}")
+        return {"result": f"分析出错: {str(e)}"}
 
 @app.post("/api/fuse")
 async def fuse_documents(request: FusionRequest):
