@@ -397,8 +397,15 @@ const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx }: { paper: Paper, o
             const data = await response.json();
             setAnalysisResult({ visible: true, type, content: data.result });
             playSfx('confirm');
-        } catch (e) {
-            setTimeout(() => { setAnalysisResult({ visible: true, type, content: "Offline Analysis Mock" }); }, 1000);
+        } catch (e: any) {
+            console.error("Mind Hack Error:", e);
+            setTimeout(() => { 
+                setAnalysisResult({ 
+                    visible: true, 
+                    type, 
+                    content: `⚠️ SYSTEM ERROR // ${e.message || "Unknown Error"}\n\n请检查后端连接或 API Key 配置。` 
+                }); 
+            }, 1000);
         } finally {
             setLoadingAnalysis(false);
         }
