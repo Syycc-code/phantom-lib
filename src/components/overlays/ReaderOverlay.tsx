@@ -16,7 +16,7 @@ import type { Paper, PlaySoundFunction } from '../../types';
 interface ReaderOverlayProps {
     paper: Paper;
     onClose: () => void;
-    onLevelUp: (s: string) => void;
+    onLevelUp: (s: keyof import('../../types').PhantomStats) => void;
     playSfx: PlaySoundFunction;
 }
 
@@ -122,7 +122,7 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx }: ReaderOver
                             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
                             className="flex flex-col items-center gap-4"
                         >
-                            {Array.from(new Array(numPages), (el, index) => (
+                            {Array.from(new Array(numPages), (_, index) => (
                                 <Page 
                                     key={`page_${index + 1}`}
                                     pageNumber={index + 1} 

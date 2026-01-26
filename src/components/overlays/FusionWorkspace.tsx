@@ -26,7 +26,7 @@ const PaperView = ({ paper, label }: { paper: Paper, label: string }) => (
 );
 
 export const FusionWorkspace = ({ paperA, paperB, initialReport, onClose, playSfx }: FusionWorkspaceProps) => {
-    const [messages, setMessages] = useState<ChatMessage[]>([{ role: 'igor', content: initialReport }]);
+    const [messages, setMessages] = useState<ChatMessage[]>([{ id: 0, role: 'igor', content: initialReport }]);
     const [input, setInput] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -40,7 +40,7 @@ export const FusionWorkspace = ({ paperA, paperB, initialReport, onClose, playSf
         if (!input.trim()) return; 
         playSfx('click'); 
         const userMsg = input; 
-        setMessages(prev => [...prev, { role: 'user', content: userMsg }]); 
+        setMessages(prev => [...prev, { id: Date.now(), role: 'user', content: userMsg }]); 
         setInput(""); 
         setIsTyping(true); 
         try { 
@@ -52,9 +52,9 @@ export const FusionWorkspace = ({ paperA, paperB, initialReport, onClose, playSf
                 body: JSON.stringify({ text: prompt, mode: 'decipher' }) 
             }); 
             const data = await response.json(); 
-            setMessages(prev => [...prev, { role: 'igor', content: data.result }]); 
+            setMessages(prev => [...prev, { id: Date.now() + 1, role: 'igor', content: data.result }]); 
         } catch (e) { 
-            setMessages(prev => [...prev, { role: 'igor', content: "My apologies. Link severed." }]); 
+            setMessages(prev => [...prev, { id: Date.now() + 1, role: 'igor', content: "My apologies. Link severed." }]); 
         } finally { 
             setIsTyping(false); 
         } 

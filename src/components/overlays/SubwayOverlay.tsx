@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { X, Search } from 'lucide-react';
-import type { Paper, FolderType, PlaySoundFunction } from '../../types';
+import type { Paper, Folder, PlaySoundFunction } from '../../types';
 
 interface SubwayOverlayProps {
     papers: Paper[];
-    folders: FolderType[];
+    folders: Folder[];
     onClose: () => void;
     onRead: (p: Paper) => void;
     playSfx: PlaySoundFunction;
@@ -13,7 +13,6 @@ interface SubwayOverlayProps {
 
 export const SubwayOverlay = ({ papers, folders, onClose, onRead, playSfx }: SubwayOverlayProps) => {
     const [searchQuery, setSearchQuery] = useState("");
-    const [hoveredPaperId, setHoveredPaperId] = useState<number | null>(null);
 
     const { tracks, connections } = useMemo(() => {
         const groups: { [key: string]: Paper[] } = {};
@@ -37,7 +36,7 @@ export const SubwayOverlay = ({ papers, folders, onClose, onRead, playSfx }: Sub
         }));
 
         const links: { x1: number, y1: number, x2: number, y2: number, color: string }[] = [];
-        const allPapers = activeTracks.flatMap((t, tIdx) => t.papers.map((p, pIdx) => ({ ...p, x: 300 + (pIdx * 200), y: t.y, color: t.color })));
+        const allPapers = activeTracks.flatMap((t) => t.papers.map((p, pIdx) => ({ ...p, x: 300 + (pIdx * 200), y: t.y, color: t.color })));
 
         for (let i = 0; i < allPapers.length; i++) {
             for (let j = i + 1; j < allPapers.length; j++) {
@@ -73,13 +72,13 @@ export const SubwayOverlay = ({ papers, folders, onClose, onRead, playSfx }: Sub
                         {connections.map((link, i) => (<path key={i} d={`M ${link.x1} ${link.y1} C ${link.x1} ${(link.y1 + link.y2)/2}, ${link.x2} ${(link.y1 + link.y2)/2}, ${link.x2} ${link.y2}`} stroke={link.color} strokeWidth="1" strokeDasharray="5,5" fill="none" />))}
                     </svg>
                     <div className="relative z-10">
-                        {tracks.map((track, tIdx) => (
+                        {tracks.map((track) => (
                             <div key={track.id} className="absolute left-0 w-full" style={{ top: track.y - 40 }}>
                                 <div className="absolute left-10 top-2 w-48"><div className="bg-black border-2 text-white px-4 py-2 font-p5 text-xl transform -skew-x-12 shadow-[4px_4px_0px_#000]" style={{ borderColor: track.color }}>{track.name}</div></div>
                                 {track.papers.map((paper, pIdx) => {
                                     const xPos = 300 + (pIdx * 200);
                                     return (
-                                        <motion.button key={paper.id} onClick={() => { onRead(paper); onClose(); playSfx('confirm'); }} onMouseEnter={() => { setHoveredPaperId(paper.id); playSfx('hover'); }} onMouseLeave={() => setHoveredPaperId(null)} style={{ left: xPos, top: 24 }} className="absolute outline-none group" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: pIdx * 0.1 }}>
+                                        <motion.button key={paper.id} onClick={() => { onRead(paper); onClose(); playSfx('confirm'); }} onMouseEnter={() => { playSfx('hover'); }} style={{ left: xPos, top: 24 }} className="absolute outline-none group" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: pIdx * 0.1 }}>
                                             <div className="relative flex flex-col items-center">
                                                 <div className="w-8 h-8 bg-white border-4 border-black transform rotate-45 group-hover:scale-150 group-hover:bg-black group-hover:border-white transition-transform duration-200 z-20" style={{ borderColor: 'black', boxShadow: `0 0 15px ${track.color}` }} />
                                                 <div className="absolute top-10 w-40 text-center pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity z-30">

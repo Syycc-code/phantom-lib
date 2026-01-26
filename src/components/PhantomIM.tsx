@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Send, X, Smartphone, Loader2 } from 'lucide-react';
+import { Send, X, Smartphone, Loader2 } from 'lucide-react';
 
 interface ChatMessage {
     id: number;

@@ -10,3 +10,6 @@ export interface Folder {
 export interface FolderCreate {
   name: string;
 }
+
+// Alias for backward compatibility
+export type FolderType = Folder;

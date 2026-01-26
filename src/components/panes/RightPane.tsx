@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, BrainCircuit, AlertTriangle, Lightbulb, ShieldAlert } from 'lucide-react';
-import { Paper } from '../../api';
+import type { Paper } from '../../types';
 
 interface RightPaneProps {
   paper: Paper | null;

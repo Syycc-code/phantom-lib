@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { Paper, PlaySoundFunction } from '../../types';
 
-interface ShatterEffectProps {}
-
 export const ShatterEffect = () => (
     <motion.div initial={{ opacity: 1, scale: 1 }} animate={{ opacity: 0, scale: 2 }} transition={{ duration: 0.6 }} className="absolute inset-0 z-50 pointer-events-none mix-blend-overlay">
         <svg viewBox="0 0 100 100" className="w-full h-full fill-white">
@@ -54,7 +52,7 @@ export const VelvetOverlay = ({ papers, onComplete, onLevelUp, playSfx }: Velvet
         <div className="fixed inset-0 z-[200] bg-[#000033] flex items-center justify-center overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle,_#000066_1px,_transparent_1px)] bg-[length:20px_20px] opacity-30" />
             <div className="relative z-10 flex space-x-20 mt-32">
-                {papers.map((p, i) => (
+                {papers.map((p) => (
                     <motion.div key={p.id} initial={{ y: 500, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-64 h-80 bg-white border-4 border-[#D4AF37] p-4 flex flex-col items-center justify-center text-center shadow-[0_0_50px_#D4AF37]">
                         <div className="text-black font-p5 text-xl">{p.title.substring(0, 30)}...</div>
                         {step < 2 && (

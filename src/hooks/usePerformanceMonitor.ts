@@ -3,7 +3,7 @@
  * 监控组件渲染、API调用等性能指标
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface PerformanceMetric {
   name: string;
