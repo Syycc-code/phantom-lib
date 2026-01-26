@@ -21,12 +21,15 @@ from rapidocr_onnxruntime import RapidOCR
 from concurrent.futures import ThreadPoolExecutor
 
 # --- RAG Dependencies ---
+# 设置 HuggingFace 镜像 (在导入 sentence_transformers 之前)
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 try:
     import chromadb
     from sentence_transformers import SentenceTransformer
     RAG_AVAILABLE = True
 except Exception as e:
-    print(f"[PHANTOM] RAG features disabled: {e}")
+    print(f"[PHANTOM] RAG features disabled (Import Error): {e}")
     RAG_AVAILABLE = False
 
 # Load Secret Keys
@@ -67,9 +70,16 @@ if RAG_AVAILABLE:
     knowledge_collection = chroma_client.get_or_create_collection(name="phantom_knowledge")
 
     # Load Embedding Model (Downloads on first run)
-    print("[PHANTOM] Loading Embedding Model...")
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
-    print("[PHANTOM] Embedding Model Ready.")
+    try:
+        print("[PHANTOM] Loading Embedding Model (using hf-mirror.com)...")
+        embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        print("[PHANTOM] Embedding Model Ready.")
+    except Exception as e:
+        print(f"[PHANTOM] Failed to load Embedding Model: {e}")
+        print("[PHANTOM] RAG features will be disabled for this session.")
+        RAG_AVAILABLE = False
+        knowledge_collection = None
+        embedder = None
 else:
     chroma_client = None
     knowledge_collection = None
