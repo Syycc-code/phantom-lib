@@ -5,3 +5,11 @@ httpx
 beautifulsoup4
 openai
 python-dotenv
+python-multipart
+pymupdf
+rapidocr_onnxruntime
+onnxruntime==1.19.2
+chromadb==1.4.1
+sentence-transformers==5.2.0
+numpy<2.0
+torch==2.5.1
