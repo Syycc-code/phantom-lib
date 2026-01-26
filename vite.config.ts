@@ -11,10 +11,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://localhost:8000',  // 使用localhost而非127.0.0.1以兼容VPN
         changeOrigin: true,
-        timeout: 300000,  // 5分钟超时（原来默认120秒）
-        proxyTimeout: 300000,  // 代理超时
+        secure: false,                     // 允许不安全连接
+        ws: true,                          // 支持WebSocket
+        timeout: 300000,                   // 5分钟超时
+        proxyTimeout: 300000,              // 代理超时
       }
     }
   }
