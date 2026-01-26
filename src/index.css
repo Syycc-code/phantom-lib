@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Fjalla+One&family=Inter:wght@400;700&display=swap');
 
 @theme {
   --color-phantom-red: #E60012;
@@ -10,8 +11,7 @@
   --font-body: "Inter", sans-serif;
 }
 
-/* Import Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Fjalla+One&family=Inter:wght@400;700&display=swap');
+/* Import Fonts - Moved to top */
 
 :root {
   font-family: var(--font-body);
