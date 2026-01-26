@@ -6,3 +6,7 @@
 export { RankUpNotification } from './notifications/RankUpNotification';
 export { TransitionCurtain, ShatterEffect } from './transitions';
 export { StatsOverlay } from './overlays/StatsOverlay';
+export { SubwayOverlay } from './overlays/SubwayOverlay';
+export { ReaderOverlay } from './overlays/ReaderOverlay';
+export { VelvetOverlay } from './overlays/VelvetOverlay';
+export { FusionWorkspace } from './overlays/FusionWorkspace';
