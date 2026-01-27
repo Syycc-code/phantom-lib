@@ -103,6 +103,20 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
 
     return (
         <div className={`h-full flex-1 flex flex-col relative overflow-hidden transition-colors duration-500 ${isVelvet ? 'bg-[#000022]' : 'bg-[#161616]'}`}>
+            {/* Hidden Input for File Upload - Kept mounted at all times */}
+            <input 
+                type="file" 
+                id="middle-pane-upload"
+                multiple 
+                className="hidden" 
+                onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                        onBulkImport(e.target.files);
+                        e.target.value = ''; // Reset to allow re-uploading same file
+                    }
+                }} 
+            />
+
             <div className={`h-24 flex items-center justify-between px-8 relative z-10 border-b-4 shrink-0 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-white'}`}>
                 <div className="absolute inset-0 bg-halftone opacity-30" />
                 <div className="z-10 flex items-center">
@@ -169,7 +183,7 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                             The system will automatically analyze and index the data.
                         </p>
                         <button 
-                            onClick={() => document.querySelector('input[type="file"]')?.click()}
+                            onClick={() => document.getElementById('middle-pane-upload')?.click()}
                             className="bg-phantom-red text-white px-8 py-3 text-2xl font-p5 border-4 border-black shadow-[8px_8px_0px_#fff] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"
                         >
                             SELECT FILES

@@ -43,12 +43,6 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
                 </button>
             ))}
             <input type="file" ref={fileInputRef} onChange={(e) => e.target.files && onBulkImport(e.target.files)} multiple className="hidden" />
-            <button onClick={() => { fileInputRef.current?.click(); playSfx('click'); }} className="relative w-full group cursor-pointer block text-left" onMouseEnter={() => playSfx('hover')}>
-                <div className={`relative flex items-center space-x-4 p-3 transform -skew-x-12 hover:text-white transition-colors ${isVelvet ? 'text-[#D4AF37]' : 'text-phantom-yellow'}`}>
-                    <Upload className="w-6 h-6" />
-                    <span className="font-p5 text-xl tracking-wider uppercase">BULK UPLOAD</span>
-                </div>
-            </button>
         </nav>
         
         <div className={`flex items-center justify-between border-b-2 pb-2 mb-4 z-10 ${isVelvet ? 'border-[#D4AF37]' : 'border-zinc-700'}`}>

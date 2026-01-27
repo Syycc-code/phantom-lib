@@ -265,8 +265,10 @@ function App() {
           }
           setUploadStatus(prev => ({ ...prev, current: i + 1 }));
       }
-      setTimeout(() => setUploadStatus({ active: false, current: 0, total: 0 }), 2000);
-      setActiveMenu('all');
+      setTimeout(() => {
+          setUploadStatus({ active: false, current: 0, total: 0 });
+          setActiveMenu('all'); // Correctly switch view after delay
+      }, 2000);
   };
 
   const handleAddPaper = (url: string) => { 
