@@ -278,6 +278,38 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, onSync, playSfx }: any) 
   return (<AnimatePresence>{paper && (<motion.div initial={{ x: "100%", skewX: -20 }} animate={{ x: 0, skewX: 0 }} exit={{ x: "100%", skewX: 20 }} transition={{ type: "spring", bounce: 0, duration: 0.4 }} className="w-[600px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex flex-col border-l-[12px] border-phantom-black"><div className="h-64 bg-phantom-red relative overflow-hidden flex items-end p-8 shrink-0 clip-path-jagged"><button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform"><X size={40} strokeWidth={4} /></button><div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" /><motion.h1 key={paper.id} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-p5 text-black leading-[0.9] transform -rotate-1 origin-bottom-left">{paper.title}</motion.h1></div><div className="flex-1 p-10 bg-zinc-100 overflow-y-auto"><div className="space-y-8"><div className="border-b-2 border-black pb-6"><div className="flex items-center justify-between mb-4"><div className="flex space-x-4 font-mono text-sm"><div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div><div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div></div><div className="flex space-x-2"><motion.button onClick={() => { onRead(); playSfx('confirm'); }} whileHover={{ scale: 1.1, rotate: 3 }} whileTap={{ scale: 0.9 }} className="flex items-center space-x-2 bg-phantom-red text-white px-4 py-2 font-p5 text-xl tracking-widest border-2 border-black shadow-[4px_4px_0px_#000] hover:bg-black hover:text-phantom-red transition-all"><Eye size={20} /> <span>READ</span></motion.button><motion.button onClick={() => { onSync(paper.id); }} whileHover={{ scale: 1.1, rotate: -3 }} whileTap={{ scale: 0.9 }} className="bg-black text-white p-2 border-2 border-zinc-500 hover:border-phantom-red hover:text-phantom-red transition-all"><BrainCircuit size={24} /></motion.button></div></div>{paper.tags.length > 0 && (<div className="flex flex-wrap gap-2 mt-2">{paper.tags.map((tag: string, i: number) => (<span key={i} className={`font-p5 text-lg px-3 py-1 transform -skew-x-12 border-2 border-black ${i % 2 === 0 ? 'bg-phantom-yellow text-black rotate-2' : 'bg-phantom-black text-white -rotate-1'}`}>#{tag.toUpperCase()}</span>))}</div>)}</div><p className="font-serif text-xl italic text-gray-800 leading-relaxed pl-6 border-l-4 border-phantom-red">"{paper.abstract}"</p>{!paper.shadow_problem ? (<motion.button onClick={handleAnalyze} disabled={analyzing} whileHover={{ scale: 1.02, x: 5 }} className="w-full py-8 bg-black text-phantom-red font-p5 text-3xl tracking-widest flex items-center justify-center space-x-4 group border-4 border-transparent hover:border-phantom-red transition-all">{analyzing ? <BrainCircuit className="w-10 h-10 animate-spin text-white" /> : <><BrainCircuit className="w-8 h-8 group-hover:animate-pulse" /> <span>ACTIVATE THIRD EYE</span></>}</motion.button>) : (<div className="space-y-6 pt-4"><h2 className="text-4xl font-p5 text-center bg-black text-white transform -skew-x-12 py-2">TRUTH REVEALED</h2><div className="grid gap-4"><motion.div initial={{x:-50, opacity:0}} animate={{x:0, opacity:1}} className="bg-[#222] p-5 text-white shadow-[6px_6px_0px_#E60012] transform -rotate-1"><h4 className="text-phantom-red font-bold uppercase tracking-widest text-xs">Shadow</h4><p className="font-p5 text-2xl">{paper.shadow_problem}</p></motion.div><motion.div initial={{x:50, opacity:0}} animate={{x:0, opacity:1}} transition={{delay:0.1}} className="bg-white border-4 border-black p-5 text-black shadow-[6px_6px_0px_#222] transform rotate-1"><h4 className="text-gray-500 font-bold uppercase tracking-widest text-xs">Persona</h4><p className="font-p5 text-2xl">{paper.persona_solution}</p></motion.div><motion.div initial={{y:20, opacity:0}} animate={{y:0, opacity:1}} transition={{delay:0.2}} className="bg-phantom-yellow border-4 border-black p-4 text-black transform -skew-x-6"><h4 className="text-black font-bold uppercase tracking-widest text-xs">Weakness</h4><p className="font-mono font-bold text-lg text-red-600">{paper.weakness_flaw}</p></motion.div></div></div>)}</div></div></motion.div>)}</AnimatePresence>);
 };
 
+const UploadProgress = ({ active, current, total }: { active: boolean, current: number, total: number }) => {
+    return (
+        <AnimatePresence>
+            {active && (
+                <motion.div 
+                    initial={{ y: 100 }} 
+                    animate={{ y: 0 }} 
+                    exit={{ y: 100 }} 
+                    className="fixed bottom-0 left-0 w-full z-[200] pointer-events-none"
+                >
+                    <div className="bg-phantom-black border-t-4 border-phantom-red p-4 flex items-center justify-between relative overflow-hidden">
+                        <div className="absolute inset-0 bg-halftone opacity-20" />
+                        <div className="flex items-center space-x-4 z-10">
+                            <Loader2 className="animate-spin text-phantom-red w-8 h-8" />
+                            <div className="text-white font-p5 text-2xl tracking-widest">
+                                INFILTRATING TARGETS... {current} / {total}
+                            </div>
+                        </div>
+                        <div className="h-4 bg-zinc-800 w-96 transform -skew-x-12 overflow-hidden border-2 border-white">
+                            <motion.div 
+                                className="h-full bg-phantom-red" 
+                                initial={{ width: 0 }} 
+                                animate={{ width: `${(current / total) * 100}%` }} 
+                            />
+                        </div>
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+};
+
 // --- Main App ---
 
 function App() {
@@ -324,6 +356,7 @@ function App() {
   const [showCurtain, setShowCurtain] = useState(false);
   const [showRankUp, setShowRankUp] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0 });
 
   // INIT AUDIO
   const playSfx = useAudioSystem();
@@ -350,6 +383,8 @@ function App() {
   // NEW: Upload to Vault
   const handleBulkImport = async (files: FileList) => { 
       playSfx('confirm');
+      setUploadStatus({ active: true, current: 0, total: files.length });
+      
       const newPapers: Paper[] = [];
       
       for (let i = 0; i < files.length; i++) {
@@ -377,7 +412,9 @@ function App() {
           } catch (e) {
               console.error("Upload failed:", e);
           }
+          setUploadStatus(prev => ({ ...prev, current: i + 1 }));
       }
+      setTimeout(() => setUploadStatus({ active: false, current: 0, total: 0 }), 2000);
       setActiveMenu('all');
   };
 
@@ -450,10 +487,11 @@ function App() {
   return (
     <div className="flex h-screen w-screen bg-phantom-black overflow-hidden font-sans text-white relative">
       <SystemMonitor /> {/* Add Monitor */}
+      <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
       <TransitionCurtain isActive={showCurtain} />
       <RankUpNotification stat={showRankUp} />
       {showStats && <StatsOverlay stats={stats} onClose={() => setShowStats(false)} playSfx={playSfx} />}
-      <LeftPane activeMenu={activeMenu} setActiveMenu={setActiveMenu} folders={folders} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onBulkImport={handleBulkImport} onShowStats={() => { setShowStats(true); playSfx('confirm'); }} playSfx={playSfx} />
+      <LeftPane activeMenu={activeMenu} setActiveMenu={setActiveMenu} folders={folders} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onBulkImport={handleBulkImport} onShowStats={() => { setShowStats(true); playSfx('confirm'); }} onSyncConfig={handleSyncConfig} playSfx={playSfx} />
       <div className="flex-1 flex relative">
         <MiddlePane 
             activeMenu={activeMenu} 
