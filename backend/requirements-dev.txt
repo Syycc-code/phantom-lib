@@ -1,0 +1,29 @@
+# ================================================
+# Phantom Library 开发依赖
+# ================================================
+# 仅用于开发环境，包含测试、代码格式化等工具
+
+-r requirements.txt
+
+# Testing Framework
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# Code Quality
+black==24.10.0
+flake8==7.1.1
+mypy==1.13.0
+isort==5.13.2
+
+# Type Stubs
+types-beautifulsoup4==4.12.0.20240907
+
+# Development Tools
+ipython==8.29.0
+watchdog==6.0.0
+
+# ================================================
+# 安装说明:
+# pip install -r requirements-dev.txt
+# ================================================
