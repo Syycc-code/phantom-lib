@@ -38,10 +38,25 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
     const handleMouseUp = () => {
         const selection = window.getSelection();
         if (!selection || selection.toString().trim().length === 0) return;
+        
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        const x = Math.min(Math.max(rect.left + (rect.width / 2), 100), window.innerWidth - 100);
-        const y = Math.max(rect.top - 50, 80); 
+        
+        // 智能计算菜单位置，确保不超出屏幕
+        const menuWidth = 250;
+        const menuHeight = 60;
+        
+        // X坐标：确保左右都不超出
+        let x = rect.left + (rect.width / 2);
+        x = Math.max(menuWidth / 2 + 20, x);
+        x = Math.min(window.innerWidth - menuWidth / 2 - 20, x);
+        
+        // Y坐标：如果顶部空间不足，放到选中文本下方
+        let y = rect.top - 50;
+        if (y < menuHeight + 100) {  // 考虑顶栏高度
+            y = rect.bottom + 20;
+        }
+        
         setSelectionMenu({ visible: true, x, y, text: selection.toString() });
         playSfx('hover');
     };
@@ -98,11 +113,15 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                 safeMode ? 'mode-safe bg-[#EAE8DC] text-[#222]' : 'bg-[#050505] text-white'
             }`}
         >
-            <div className="h-20 bg-phantom-red flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-lg z-20">
-                <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
+            <div className={`h-20 flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-lg z-20 transition-colors duration-500 ${
+                safeMode ? 'bg-[#D4CFC0]' : 'bg-phantom-red'
+            }`}>
+                <div className={`absolute inset-0 opacity-20 mix-blend-overlay ${safeMode ? '' : 'bg-halftone'}`} />
                 <div className="z-10 flex items-center space-x-4">
-                    <Maximize2 className="text-black" />
-                    <h2 className="font-p5 text-3xl text-black truncate max-w-4xl transform -skew-x-12">
+                    <Maximize2 className={safeMode ? 'text-[#4A4A4A]' : 'text-black'} />
+                    <h2 className={`font-p5 text-3xl truncate max-w-4xl transform -skew-x-12 ${
+                        safeMode ? 'text-[#4A4A4A]' : 'text-black'
+                    }`}>
                         READING // {paper.title}
                     </h2>
                     {paper.ocrStatus === 'scanning' && (
@@ -114,26 +133,57 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                 </div>
                 <div className="flex items-center space-x-4 z-10">
                     <button 
+                        onClick={() => { setSafeMode(!safeMode); playSfx('click'); }}
+                        className={`px-4 py-2 font-p5 text-sm border-2 rounded-full transition-colors flex items-center space-x-2 ${
+                            safeMode 
+                                ? 'bg-[#4A4A4A] text-white border-[#4A4A4A] hover:bg-white hover:text-[#4A4A4A]' 
+                                : 'bg-white text-black border-white hover:bg-black hover:text-white'
+                        }`}
+                    >
+                        <Eye size={16} />
+                        <span>{safeMode ? 'HEIST MODE' : 'SAFE MODE'}</span>
+                    </button>
+                    <button 
                         onClick={() => { setShowNotes(!showNotes); playSfx('click'); }}
-                        className={`px-4 py-2 font-p5 text-sm border-2 border-white rounded-full transition-colors flex items-center space-x-2 ${
-                            showNotes ? 'bg-phantom-yellow text-black' : 'bg-white text-black hover:bg-phantom-yellow'
+                        className={`px-4 py-2 font-p5 text-sm border-2 rounded-full transition-colors flex items-center space-x-2 ${
+                            safeMode
+                                ? (showNotes ? 'bg-[#8C8C8C] text-white border-[#8C8C8C]' : 'bg-white text-[#4A4A4A] border-white hover:bg-[#8C8C8C] hover:text-white')
+                                : (showNotes ? 'bg-phantom-yellow text-black border-white' : 'bg-white text-black border-white hover:bg-phantom-yellow')
                         }`}
                     >
                         <FileText size={16} />
                         <span>NOTES</span>
                     </button>
-                    <button onClick={() => { onClose(); onLevelUp('knowledge'); playSfx('rankup'); }} className="bg-black text-white px-4 py-2 font-p5 text-sm hover:bg-phantom-yellow hover:text-black transition-colors border-2 border-white rounded-full">
+                    <button 
+                        onClick={() => { onClose(); onLevelUp('knowledge'); playSfx('rankup'); }} 
+                        className={`px-4 py-2 font-p5 text-sm border-2 rounded-full transition-colors ${
+                            safeMode 
+                                ? 'bg-[#4A4A4A] text-white border-white hover:bg-white hover:text-[#4A4A4A]' 
+                                : 'bg-black text-white border-white hover:bg-phantom-yellow hover:text-black'
+                        }`}
+                    >
                         FINISH READING
                     </button>
-                    <button onClick={() => { onClose(); playSfx('cancel'); }} className="bg-black text-white p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 border-white z-10">
+                    <button 
+                        onClick={() => { onClose(); playSfx('cancel'); }} 
+                        className={`p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 ${
+                            safeMode 
+                                ? 'bg-[#4A4A4A] text-white border-white' 
+                                : 'bg-black text-white border-white'
+                        }`}
+                    >
                         <X size={24} />
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 bg-zinc-900 relative overflow-auto flex justify-center p-8 custom-scrollbar" onMouseUp={handleMouseUp}>
+            <div className={`flex-1 relative overflow-auto flex justify-center p-8 custom-scrollbar transition-colors duration-500 ${
+                safeMode ? 'bg-[#F5F3ED]' : 'bg-zinc-900'
+            }`} onMouseUp={handleMouseUp}>
                 {paper.fileUrl ? (
-                    <div className="shadow-2xl selection:bg-phantom-red selection:text-black flex flex-col items-center pb-20">
+                    <div className={`shadow-2xl flex flex-col items-center pb-20 ${
+                        safeMode ? 'selection:bg-[#8C8C8C] selection:text-white' : 'selection:bg-phantom-red selection:text-black'
+                    }`}>
                         <Document
                             file={paper.fileUrl}
                             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
@@ -153,8 +203,14 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                         </Document>
                     </div>
                 ) : (
-                    <div ref={contentRef} className="max-w-4xl w-full bg-zinc-800/50 p-12 min-h-full border-l-4 border-zinc-700 selection:bg-phantom-red selection:text-black">
-                        <div className="font-serif text-xl leading-loose text-zinc-300 whitespace-pre-wrap">
+                    <div ref={contentRef} className={`max-w-4xl w-full p-12 min-h-full border-l-4 transition-colors duration-500 ${
+                        safeMode 
+                            ? 'bg-white/50 border-[#D4CFC0] selection:bg-[#8C8C8C] selection:text-white' 
+                            : 'bg-zinc-800/50 border-zinc-700 selection:bg-phantom-red selection:text-black'
+                    }`}>
+                        <div className={`font-serif text-xl leading-loose whitespace-pre-wrap ${
+                            safeMode ? 'text-[#222]' : 'text-zinc-300'
+                        }`}>
                             {paper.content || (paper.ocrStatus === 'scanning' ? "SCANNING DOCUMENT FOR COGNITIVE DATA..." : "NO TEXT EXTRACTED.")}
                         </div>
                     </div>
@@ -185,10 +241,17 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                         <motion.div
                             drag
                             dragMomentum={false}
+                            dragConstraints={{
+                                top: 80,
+                                left: 0,
+                                right: typeof window !== 'undefined' ? window.innerWidth - 400 : 800,
+                                bottom: typeof window !== 'undefined' ? window.innerHeight - 300 : 500
+                            }}
+                            dragElastic={0.1}
                             initial={{ scale: 0.8, opacity: 0, y: 50 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.8, opacity: 0 }}
-                            className="fixed z-[200] top-1/3 left-1/3 w-[400px] bg-white border-4 border-black shadow-[16px_16px_0px_rgba(0,0,0,0.8)] cursor-move"
+                            className="fixed z-[200] top-1/3 left-1/2 -translate-x-1/2 w-[400px] max-w-[90vw] bg-white border-4 border-black shadow-[16px_16px_0px_rgba(0,0,0,0.8)] cursor-move"
                         >
                             <div className="bg-black p-2 flex justify-between items-center cursor-grab active:cursor-grabbing">
                                 <div className="flex items-center space-x-2">
@@ -234,7 +297,7 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                         animate={{ x: 0 }} 
                         exit={{ x: "100%" }} 
                         transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-                        className="fixed right-0 top-0 w-[400px] h-full bg-phantom-yellow border-l-4 border-black shadow-[-8px_0_16px_rgba(0,0,0,0.3)] z-[110]"
+                        className="fixed right-0 top-0 w-[400px] max-w-[40vw] min-w-[300px] h-full bg-phantom-yellow border-l-4 border-black shadow-[-8px_0_16px_rgba(0,0,0,0.3)] z-[110]"
                     >
                         <div className="h-full flex flex-col">
                             <div className="bg-black text-white p-4 flex items-center justify-between shrink-0">

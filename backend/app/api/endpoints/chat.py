@@ -26,6 +26,7 @@ class MindHackRequest(BaseModel):
 @router.post("/chat_stream")
 async def chat_stream(request: ChatRequest):
     system_metrics["ai_state"] = "THINKING"
+    system_metrics["last_activity"] = time.time()
     start_time = time.time()
 
     async def generate():
@@ -72,10 +73,12 @@ async def chat_stream(request: ChatRequest):
             
             system_metrics["ai_latency_ms"] = int((time.time() - start_time) * 1000)
             system_metrics["ai_state"] = "IDLE"
+            system_metrics["last_activity"] = time.time()
             yield f"data: {json.dumps({'done': True, 'sources': sources}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             system_metrics["ai_state"] = "ERROR"
+            system_metrics["last_activity"] = time.time()
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -85,6 +88,7 @@ from app.services.analysis import analyze_paper_content
 @router.post("/mind_hack")
 async def mind_hack(request: MindHackRequest):
     system_metrics["ai_state"] = "THINKING"
+    system_metrics["last_activity"] = time.time()
     try:
         # If mode is analyze_paper, we use the specialized service
         if request.mode == "analyze_paper":
@@ -100,6 +104,7 @@ async def mind_hack(request: MindHackRequest):
                 f"FLAW: {result.get('weakness_flaw')}"
             )
             system_metrics["ai_state"] = "IDLE"
+            system_metrics["last_activity"] = time.time()
             return {"result": formatted_res, "raw": result}
 
         sys_prompt = SYSTEM_PROMPTS["MIND_HACK_TRANSLATE"] if request.mode == "translate" else SYSTEM_PROMPTS["MIND_HACK_ANALYZE"]
@@ -109,7 +114,9 @@ async def mind_hack(request: MindHackRequest):
             stream=False
         )
         system_metrics["ai_state"] = "IDLE"
+        system_metrics["last_activity"] = time.time()
         return {"result": response.choices[0].message.content}
     except Exception as e:
         system_metrics["ai_state"] = "ERROR"
+        system_metrics["last_activity"] = time.time()
         return {"result": f"Error: {e}"}

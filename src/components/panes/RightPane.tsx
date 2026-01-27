@@ -29,7 +29,7 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote }: R
                 animate={{ x: 0, skewX: 0 }} 
                 exit={{ x: "100%", skewX: 20 }} 
                 transition={{ type: "spring", bounce: 0, duration: 0.4 }} 
-                className="w-[600px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex border-l-[12px] border-phantom-black"
+                className="w-[600px] max-w-[50vw] min-w-[400px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex border-l-[12px] border-phantom-black"
             >
                 {/* Main Content (Full Width) */}
                 <div className="flex-1 flex flex-col h-full border-r-2 border-black">

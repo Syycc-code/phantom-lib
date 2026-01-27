@@ -83,18 +83,18 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
             transition: { delay: i * 0.05, type: "spring" }
         }),
         hover: { 
-            scale: 1.05, 
-            x: 30,
+            scale: 1.02, 
+            x: 12,
             skewX: 0,
             backgroundColor: "#FFFFFF",
             color: "#000000",
-            boxShadow: "20px 0px 0px #E60012, 8px 8px 0px rgba(0,0,0,0.8)",
+            boxShadow: "8px 0px 0px #E60012, 4px 4px 0px rgba(0,0,0,0.8)",
             zIndex: 10,
             transition: { duration: 0.1 }
         },
-        tap: { scale: 0.95, x: 10, skewX: 0 },
+        tap: { scale: 0.95, x: 8, skewX: 0 },
         selected: { 
-            x: 30, 
+            x: 20, 
             backgroundColor: "#000", 
             color: "#E60012",
             borderLeftWidth: "16px",

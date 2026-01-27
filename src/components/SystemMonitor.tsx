@@ -53,6 +53,13 @@ export default function SystemMonitor() {
         <motion.div 
             drag
             dragMomentum={false}
+            dragConstraints={{
+                top: -16,
+                left: -150,
+                right: 0,
+                bottom: typeof window !== 'undefined' ? window.innerHeight - 100 : 500
+            }}
+            dragElastic={0.1}
             whileDrag={{ scale: 1.1, cursor: "grabbing" }}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
