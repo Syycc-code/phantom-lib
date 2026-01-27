@@ -59,7 +59,7 @@ export default function SystemMonitor() {
             animate={{ opacity: 1, x: 0 }}
             className="fixed top-4 right-4 z-[1000] font-mono text-[10px] cursor-grab"
         >
-            <div className="bg-black/80 backdrop-blur-sm border border-phantom-red/50 p-2 rounded-sm shadow-[2px_2px_0px_#E60012] w-48 pointer-events-auto">
+            <div className="bg-phantom-black/80 backdrop-blur-sm border border-phantom-red/50 p-2 rounded-sm shadow-[2px_2px_0px_#E60012] w-48 pointer-events-auto text-[var(--color-text)]">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
                     <span className="text-phantom-red font-bold flex items-center gap-1">
@@ -75,13 +75,13 @@ export default function SystemMonitor() {
                     {/* Ping */}
                     <div className="flex justify-between text-gray-400">
                         <span className="flex items-center gap-1"><Wifi size={10} /> PING</span>
-                        <span className="text-white">{ping}ms</span>
+                        <span className="text-current font-bold">{ping}ms</span>
                     </div>
 
                     {/* AI Latency */}
                     <div className="flex justify-between text-gray-400">
                         <span className="flex items-center gap-1"><Brain size={10} /> AI_LAT</span>
-                        <span className={metrics.ai_latency_ms > 5000 ? "text-red-400" : "text-white"}>
+                        <span className={metrics.ai_latency_ms > 5000 ? "text-red-400" : "text-current font-bold"}>
                             {metrics.ai_latency_ms}ms
                         </span>
                     </div>
@@ -89,7 +89,7 @@ export default function SystemMonitor() {
                     {/* OCR Speed */}
                     <div className="flex justify-between text-gray-400">
                         <span className="flex items-center gap-1"><Zap size={10} /> OCR_SPD</span>
-                        <span className="text-white">{metrics.ocr_speed_ms}ms</span>
+                        <span className="text-current font-bold">{metrics.ocr_speed_ms}ms</span>
                     </div>
                     
                     {/* AI State */}

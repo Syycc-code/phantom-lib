@@ -208,6 +208,12 @@ function App() {
   const [showRankUp, setShowRankUp] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0 });
+  
+  // Safe Mode (Reading Mode) Logic
+  const [uiMode, setUiMode] = useState<'heist' | 'safe'>('heist');
+  useEffect(() => {
+      setUiMode(isReading ? 'safe' : 'heist');
+  }, [isReading]);
 
   // INIT AUDIO
   const playSfx = useAudioSystem();
@@ -338,7 +344,7 @@ function App() {
   const toggleFusionSelection = (id: number) => { if (fusionTargetIds.includes(id)) { setFusionTargetIds(prev => prev.filter(i => i !== id)); } else { if (fusionTargetIds.length < 2) { setFusionTargetIds(prev => [...prev, id]); } } playSfx('click'); };
 
   return (
-    <div className="flex h-screen w-screen bg-phantom-black overflow-hidden font-sans text-white relative">
+    <div className={`flex h-screen w-screen bg-phantom-black overflow-hidden font-sans relative bg-halftone bg-noise transition-colors duration-1000 ${uiMode === 'safe' ? 'mode-safe' : ''}`}>
       <SystemMonitor /> {/* Add Monitor */}
       <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
       <TransitionCurtain isActive={showCurtain} />

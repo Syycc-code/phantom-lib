@@ -20,11 +20,16 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
   const systemItems = [{ icon: BookOpen, label: 'All References', id: 'all' }, { icon: Plus, label: 'Infiltrate (Add)', id: 'add' }, { icon: Gem, label: 'Velvet Room', id: 'velvet' }, { icon: Tag, label: 'Recent', id: 'recent' }];
   
   return (
-    <div className={`h-full border-r-4 p-6 flex flex-col text-white w-72 shrink-0 relative overflow-hidden z-20 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-phantom-red'}`}>
+    <div className={`h-full border-r-4 p-6 flex flex-col w-72 shrink-0 relative overflow-hidden z-20 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-phantom-red'}`}>
         <div className="absolute top-0 left-0 w-full h-full bg-halftone opacity-50 pointer-events-none" />
         <div className="mb-10 relative transform -rotate-6 origin-top-left cursor-default">
-            <h1 className={`text-6xl font-p5 tracking-tighter leading-none ${isVelvet ? 'text-[#D4AF37]' : 'text-white'}`} style={{ textShadow: isVelvet ? "2px 2px 0px #000" : "4px 4px 0px #E60012" }}>ARCHIVE</h1>
-            <div className="bg-white text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-1 ml-2">PHANTOM LIB V.2.7</div>
+            <h1 className={`font-p5 tracking-tighter leading-none ${isVelvet ? 'text-[#D4AF37]' : 'text-white'}`} style={{ textShadow: isVelvet ? "2px 2px 0px #000" : "4px 4px 0px #E60012" }}>
+                <span className="text-8xl font-black">P</span>
+                <span className="text-5xl">HANTOM</span>
+                <br/>
+                <span className="text-3xl opacity-60 tracking-widest">ARCHIVE</span>
+            </h1>
+            <div className="bg-phantom-yellow text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-2 ml-2 shadow-[2px_2px_0px_#000]">LIB V.2.7</div>
         </div>
         
         <div className="space-y-2 mb-6">

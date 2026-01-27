@@ -83,12 +83,13 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
         }),
         hover: { 
             scale: 1.05, 
-            x: 20, 
-            skewX: -10,
-            backgroundColor: "#E60012",
-            color: "#FFF",
-            boxShadow: "10px 10px 0px rgba(0,0,0,1)",
-            zIndex: 10
+            x: 30,
+            skewX: 0,
+            backgroundColor: "#FFFFFF",
+            color: "#000000",
+            boxShadow: "20px 0px 0px #E60012, 8px 8px 0px rgba(0,0,0,0.8)",
+            zIndex: 10,
+            transition: { duration: 0.1 }
         },
         tap: { scale: 0.95, x: 10, skewX: 0 },
         selected: { 
@@ -117,16 +118,16 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                 }} 
             />
 
-            <div className={`h-24 flex items-center justify-between px-8 relative z-10 border-b-4 shrink-0 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-white'}`}>
+            <div className={`h-24 flex items-center justify-between px-8 relative z-10 border-b-4 shrink-0 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-current'}`}>
                 <div className="absolute inset-0 bg-halftone opacity-30" />
                 <div className="z-10 flex items-center">
-                    <h2 className={`text-4xl font-p5 tracking-wide transform -skew-x-12 uppercase truncate max-w-xs ${isVelvet ? 'text-[#D4AF37]' : 'text-white'}`}>
+                    <h2 className={`text-4xl font-p5 tracking-wide transform -skew-x-12 uppercase truncate max-w-xs ${isVelvet ? 'text-[#D4AF37]' : ''}`}>
                         {activeMenu === 'add' ? 'INFILTRATION' : activeMenu === 'velvet' ? 'VELVET ROOM' : 'MEMENTOS'}
                     </h2>
                     {isSelectionMode && !isVelvet && <span className="ml-4 bg-phantom-red text-black font-bold px-2 transform -skew-x-12">SELECT MODE</span>}
                 </div>
                 {!isVelvet && activeMenu !== 'add' && (
-                    <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedIds([]); playSfx('click'); }} className={`z-10 p-2 rounded border-2 transition-all ${isSelectionMode ? 'bg-white text-black border-phantom-red' : 'text-zinc-500 border-zinc-700 hover:text-white'}`}>
+                    <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedIds([]); playSfx('click'); }} className={`z-10 p-2 rounded border-2 transition-all ${isSelectionMode ? 'bg-white text-black border-phantom-red' : 'text-zinc-500 border-zinc-700 hover:text-current'}`}>
                         <Trash2 size={20} />
                     </button>
                 )}
@@ -151,7 +152,7 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                                 className={`relative p-5 cursor-pointer group transition-colors duration-100 transform border-2 border-transparent ${
                                     isSelected ? '' : 'bg-zinc-900 border-zinc-700 text-gray-300'
                                 }`}
-                                style={{ clipPath: "polygon(0 0, 100% 0, 98% 100%, 2% 98%)" }}
+                                style={{ clipPath: "polygon(0 0, 98% 0, 100% 5%, 100% 95%, 95% 100%, 2% 98%, 0 90%, 3% 10%)" }}
                             >
                                 {/* DECORATIVE SPIKE ON HOVER */}
                                 <div className="absolute -left-10 top-0 bottom-0 w-8 bg-black transform skew-x-12 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />

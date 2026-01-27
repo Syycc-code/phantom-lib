@@ -10,7 +10,9 @@ export default {
         phantom: {
           red: '#E60012',
           black: '#111111',
-          yellow: '#FCEC0C',
+          yellow: '#FFE100',
+          'dark-grey': '#1A1A1A',
+          white: '#E0E0E0',
         }
       },
       fontFamily: {
