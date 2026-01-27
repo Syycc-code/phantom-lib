@@ -67,6 +67,7 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
         setShowCurtain(true); 
         setTimeout(() => { 
             setIsFusing(true); 
+            setFusionResult("The twins are converging... Ask me anything about their connection.");
             setShowCurtain(false); 
         }, 600); 
         playSfx('confirm'); 

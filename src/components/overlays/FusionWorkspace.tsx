@@ -17,10 +17,12 @@ const PaperView = ({ paper, label }: { paper: Paper, label: string }) => (
             <span className="truncate max-w-[70%]">{label}: {paper.title}</span>
             <span className="text-xs font-mono opacity-80">{paper.author}</span>
         </div>
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            <div className="font-serif text-lg leading-relaxed text-black whitespace-pre-wrap">
-                {paper.content || paper.abstract || "NO DATA."}
-            </div>
+        <div className="flex-1 bg-gray-200">
+            <iframe 
+               src={paper.fileUrl} 
+               className="w-full h-full border-none"
+               title={label}
+            />
         </div>
     </div>
 );
