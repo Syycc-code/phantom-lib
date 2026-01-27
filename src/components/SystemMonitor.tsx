@@ -37,7 +37,8 @@ export default function SystemMonitor() {
             }
         };
 
-        const interval = setInterval(fetchMetrics, 1000);
+        // 降低轮询频率到 5秒，避免阻塞 Chat 请求
+        const interval = setInterval(fetchMetrics, 5000);
         return () => clearInterval(interval);
     }, []);
 
