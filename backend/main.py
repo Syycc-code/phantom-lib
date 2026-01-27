@@ -32,6 +32,15 @@ except Exception as e:
     print(f"[PHANTOM] RAG features disabled (Import Error): {e}")
     RAG_AVAILABLE = False
 
+# --- Web Search Dependencies ---
+try:
+    from duckduckgo_search import DDGS
+    SEARCH_AVAILABLE = True
+    print("[PHANTOM] Web Search Module Loaded.")
+except ImportError:
+    print("[PHANTOM] duckduckgo-search not found. Web search disabled.")
+    SEARCH_AVAILABLE = False
+
 # Load Secret Keys
 from pathlib import Path
 env_path = Path(__file__).parent.parent / ".env"
@@ -41,6 +50,17 @@ if not os.getenv("DEEPSEEK_API_KEY"):
     load_dotenv()
 
 from models import Paper, PaperCreate, PaperRead
+
+import time  # For monitoring
+
+# --- Global Metrics ---
+system_metrics = {
+    "status": "ONLINE",
+    "ai_latency_ms": 0,    # Last DeepSeek response time
+    "ocr_speed_ms": 0,     # Last OCR process time
+    "last_activity": time.time(),
+    "ai_state": "IDLE"     # IDLE, THINKING, RETRIEVING
+}
 
 # --- Database Setup ---
 sqlite_file_name = "phantom_database.db"
@@ -52,9 +72,11 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
 # --- AI Setup ---
+# 增加 timeout 设置 (30秒 -> 15秒)，避免长时间等待
 deepseek_client = AsyncOpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY", "mock-key"), 
-    base_url="https://api.deepseek.com"
+    base_url="https://api.deepseek.com",
+    timeout=15.0
 )
 
 # --- OCR Setup ---
@@ -184,13 +206,38 @@ def index_document(text: str, filename: str):
     )
     print(f"[MEMORY] Indexed {len(chunks)} fragments from {filename}")
 
+# --- Helper: Web Search ---
+def perform_web_search(query: str, max_results=3) -> str:
+    """Uses DuckDuckGo to find external intel."""
+    if not SEARCH_AVAILABLE:
+        return ""
+    
+    print(f"[SEARCH] Infiltrating public network for: {query}")
+    try:
+        results_text = ""
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+            for i, res in enumerate(results):
+                results_text += f"[Web Result {i+1}: {res['title']}]\n{res['body']}\nSource: {res['href']}\n\n"
+        return results_text
+    except Exception as e:
+        print(f"[SEARCH ERROR] {e}")
+        return f"[Web Search Failed: {str(e)}]"
+
 # --- Endpoints ---
 
 # 用于存储处理状态
 processing_status = {}
 
+@app.get("/api/monitor")
+async def get_system_monitor():
+    """Skill: Tactical Support (System Monitor)"""
+    # Calculate uptime or fake load for visuals
+    return system_metrics
+
 @app.post("/api/scan_document")
 async def scan_document(file: UploadFile = File(...)):
+    start_time = time.time()
     try:
         content = await file.read()
         
@@ -208,6 +255,9 @@ async def scan_document(file: UploadFile = File(...)):
             extract_text_from_file(content, file.filename or "unknown"),
             timeout=240.0
         )
+
+        end_time = time.time()
+        system_metrics["ocr_speed_ms"] = int((end_time - start_time) * 1000)
         
         # 后台索引（不等待完成）
         if len(text) > 50:
@@ -222,6 +272,7 @@ async def scan_document(file: UploadFile = File(...)):
         }
     
     except asyncio.TimeoutError:
+        system_metrics["ocr_speed_ms"] = -1 # Indicate timeout
         return {
             "filename": file.filename,
             "error": "OCR处理超时（超过4分钟），请尝试上传较小的文件或质量更好的PDF",
@@ -250,9 +301,12 @@ async def chat_with_phantom(request: ChatRequest):
     """
     Skill 6: RAG Chat (The IM Log)
     """
+    print(f"[PHANTOM] Received Chat Query: {request.query}") # Log receipt
+
     if not RAG_AVAILABLE or not knowledge_collection or not embedder:
+        print("[PHANTOM] RAG not available, returning error.")
         return {
-            "answer": "【RAG功能未启用】需要安装 Visual C++ Redistributable 才能使用 AI 记忆功能。\n\n暂时只能使用基础功能。",
+            "answer": "【RAG功能未启用】系统未能加载 AI 记忆模块（可能是模型下载失败）。\n\n请尝试重启，或检查网络连接。",
             "sources": []
         }
     
@@ -260,16 +314,22 @@ async def chat_with_phantom(request: ChatRequest):
     api_key = os.getenv("DEEPSEEK_API_KEY")
 
     # 1. Retrieve (Optimized: n_results reduced from 3 to 2 for faster response)
-    query_embedding = embedder.encode([query]).tolist()
-    results = knowledge_collection.query(
-        query_embeddings=query_embedding,
-        n_results=2
-    )
+    try:
+        print("[PHANTOM] Retrieving context...")
+        query_embedding = embedder.encode([query]).tolist()
+        results = knowledge_collection.query(
+            query_embeddings=query_embedding,
+            n_results=2
+        )
+    except Exception as e:
+        print(f"[PHANTOM] Retrieval Error: {e}")
+        # Continue without context if retrieval fails
+        results = {'documents': [], 'metadatas': []}
     
     context_text = ""
     sources = set()
     
-    if results['documents']:
+    if results.get('documents'):
         for i, doc in enumerate(results['documents'][0]):
             meta = results['metadatas'][0][i]
             source = meta.get('source', 'Unknown')
@@ -278,6 +338,30 @@ async def chat_with_phantom(request: ChatRequest):
 
     if not context_text:
         context_text = "No relevant internal documents found."
+    
+    # --- WEB SEARCH FALLBACK (NEW) ---
+    # 如果本地没有找到相关文档，或者用户显式要求搜索（这里简化为本地无结果即搜索）
+    if "No relevant internal documents found" in context_text and SEARCH_AVAILABLE:
+        print("[PHANTOM] Local intel missing. Initiating Web Search protocol...")
+        system_metrics["ai_state"] = "SEARCHING"
+        try:
+            # 运行同步搜索（在线程池中以免阻塞）
+            loop = asyncio.get_event_loop()
+            web_results = await loop.run_in_executor(None, perform_web_search, query)
+            
+            if web_results:
+                context_text = f"【本地数据库无结果，已切换至广域网搜索模式】\n\n{web_results}"
+                print("[PHANTOM] Web Search successful. Data injected.")
+                # 添加来源标记（虽然不是本地文件）
+                sources.add("Global Network (Web)")
+            else:
+                context_text += "\n[Web Search yielded no results]"
+        except Exception as e:
+            print(f"[SEARCH ERROR] {e}")
+        finally:
+             system_metrics["ai_state"] = "IDLE"
+
+    print(f"[PHANTOM] Context found from {len(sources)} sources. Generating answer...")
 
     # 2. Generate
     system_prompt = (
@@ -295,6 +379,9 @@ async def chat_with_phantom(request: ChatRequest):
         }
 
     try:
+        system_metrics["ai_state"] = "THINKING"
+        start_time = time.time()
+        
         response = await deepseek_client.chat.completions.create(
             model="deepseek-chat",
             messages=[
@@ -304,13 +391,22 @@ async def chat_with_phantom(request: ChatRequest):
             stream=False,
             max_tokens=500  # Added token limit for faster response
         )
+        
+        end_time = time.time()
+        system_metrics["ai_latency_ms"] = int((end_time - start_time) * 1000)
+        system_metrics["ai_state"] = "IDLE"
+
+        print("[PHANTOM] DeepSeek Response Received.")
         return {
             "answer": response.choices[0].message.content,
             "sources": list(sources)
         }
     except Exception as e:
+        system_metrics["ai_state"] = "ERROR"
+        error_msg = str(e)
+        print(f"[PHANTOM] DeepSeek API Error: {error_msg}")
         return {
-            "answer": f"SYSTEM ERROR: Cognitive Link Severed. {str(e)}",
+            "answer": f"⚠️ **COGNITIVE BREAKDOWN** (API Error)\n\n连接 DeepSeek 时发生错误: {error_msg}\n\n可能原因: API 超时、密钥失效或服务器繁忙。",
             "sources": []
         }
 
@@ -392,6 +488,10 @@ async def chat_with_phantom_stream(request: ChatRequest):
 
 @app.post("/api/mind_hack")
 async def mind_hack(request: MindHackRequest):
+    print(f"[PHANTOM] Mind Hack Initiated. Mode: {request.mode}")
+    system_metrics["ai_state"] = "THINKING"
+    start_time = time.time()
+    
     try:
         api_key = os.getenv("DEEPSEEK_API_KEY")
         
@@ -402,6 +502,7 @@ async def mind_hack(request: MindHackRequest):
             
         if not api_key or api_key == "mock-key":
             await asyncio.sleep(1)
+            system_metrics["ai_state"] = "IDLE"
             return {"result": f"【模拟回复 - 离线模式】\n请在 .env 文件中配置 DEEPSEEK_API_KEY。\n\n目标文本: {request.text[:50]}..."}
 
         response = await deepseek_client.chat.completions.create(
@@ -409,8 +510,15 @@ async def mind_hack(request: MindHackRequest):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": request.text}],
             stream=False
         )
+        
+        end_time = time.time()
+        system_metrics["ai_latency_ms"] = int((end_time - start_time) * 1000)
+        system_metrics["ai_state"] = "IDLE"
+        
         return {"result": response.choices[0].message.content}
+
     except Exception as e:
+        system_metrics["ai_state"] = "ERROR"
         print(f"[MindHack Error] {e}")
         return {"result": f"分析出错: {str(e)}"}
 
