@@ -11,7 +11,7 @@ echo [*] Initializing Cognitive Engine...
 
 :: 1. Start Backend (Python)
 echo [*] Launching Backend Node (Port 8000)...
-start "Phantom Backend" cmd /k "cd backend && title BACKEND && echo [PHANTOM] Waiting for connection... && uvicorn main:app --reload --host 0.0.0.0"
+start "Phantom Backend" cmd /k "cd backend && title BACKEND && echo [PHANTOM] Waiting for connection... && uvicorn app.main:app --reload --host 0.0.0.0"
 
 :: 2. Wait for Backend to warm up
 timeout /t 3 /nobreak >nul

@@ -37,11 +37,23 @@ export default function PhantomIM() {
         const botMsgId = Date.now() + 1;
         setMessages(prev => [...prev, { id: botMsgId, role: 'oracle', content: "" }]);
 
+        // Construct history (exclude current user msg which is in 'input', and exclude system msg)
+        const historyPayload = messages
+            .slice(-6) // Get last 6 messages
+            .filter(m => m.id !== 0) // Exclude system welcome message
+            .map(m => ({
+                role: m.role,
+                content: m.content
+            }));
+
         try {
             const res = await fetch('/api/chat_stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: userText })
+                body: JSON.stringify({ 
+                    query: userText,
+                    history: historyPayload 
+                })
             });
 
             if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);

@@ -276,11 +276,34 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx }: any) => {
 // --- Main App ---
 
 function App() {
-  const [papers, setPapers] = useState<Paper[]>(() => { const saved = localStorage.getItem('phantom_papers'); return saved ? JSON.parse(saved) : INITIAL_PAPERS; });
+  const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>(() => { const saved = localStorage.getItem('phantom_folders'); return saved ? JSON.parse(saved) : INITIAL_FOLDERS; });
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });
 
-  useEffect(() => { localStorage.setItem('phantom_papers', JSON.stringify(papers)); }, [papers]);
+  // Load Papers from Vault (Backend)
+  useEffect(() => {
+      const loadPapers = async () => {
+          try {
+              const res = await fetch('/api/papers');
+              if (res.ok) {
+                  const data = await res.json();
+                  // Map backend model to frontend Paper type
+                  const mappedPapers = data.map((p: any) => ({
+                      ...p,
+                      type: "PDF",
+                      tags: ["Stored"],
+                      content: p.abstract, // Use abstract as content preview
+                      fileUrl: `/api/papers/${p.id}/pdf`
+                  }));
+                  setPapers(mappedPapers);
+              }
+          } catch (e) {
+              console.error("Failed to connect to Vault:", e);
+          }
+      };
+      loadPapers();
+  }, []);
+
   useEffect(() => { localStorage.setItem('phantom_folders', JSON.stringify(folders)); }, [folders]);
   useEffect(() => { localStorage.setItem('phantom_stats', JSON.stringify(stats)); }, [stats]);
 
@@ -303,7 +326,7 @@ function App() {
   const handleLevelUp = (statName: keyof PhantomStats) => {
       setStats(prev => ({ ...prev, [statName]: Math.min(10, prev[statName] + 1) }));
       setShowRankUp(statName);
-      playSfx('rankup'); // AUDIO TRIGGER
+      playSfx('rankup');
       setTimeout(() => setShowRankUp(null), 3000);
   };
 
@@ -319,11 +342,66 @@ function App() {
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const processOCR = async (file: File, paperId: number) => { try { const formData = new FormData(); formData.append('file', file); const response = await fetch('/api/scan_document', { method: 'POST', body: formData }); if (!response.ok) throw new Error("Scan Failed"); const data = await response.json(); setPapers(prev => prev.map(p => { if (p.id === paperId) { return { ...p, ocrStatus: 'complete', content: data.extracted_text, abstract: data.extracted_text.substring(0, 200) + "..." }; } return p; })); } catch (e) { setPapers(prev => prev.map(p => p.id === paperId ? { ...p, ocrStatus: 'failed' } : p)); } };
-  const handleBulkImport = (files: FileList, targetFolderId?: string) => { const targetFolder = targetFolderId || (activeMenu.startsWith('folder_') ? activeMenu.split('folder_')[1] : undefined); const newPapers: Paper[] = []; Array.from(files).forEach((file, i) => { const isPdf = file.type === 'application/pdf'; const isText = file.type.includes('text') || file.name.endsWith('.md') || file.name.endsWith('.txt'); const id = Date.now() + i; const newPaper: Paper = { id, title: file.name.replace(/\.[^/.]+$/, ""), author: "Local Upload", year: "2024", type: isPdf ? "PDF" : (isText ? "FILE" : "IMG"), folderId: targetFolder, tags: ["Uploaded"], abstract: "Processing content...", content: "", fileUrl: isPdf ? URL.createObjectURL(file) : undefined, ocrStatus: 'scanning' }; newPapers.push(newPaper); processOCR(file, id); }); setPapers(prev => [...newPapers, ...prev]); if (newPapers.length > 0) { if (targetFolder) setActiveMenu(`folder_${targetFolder}`); else setActiveMenu('all'); } };
-  const handleAddPaper = (url: string) => { const newPaper: Paper = { id: Date.now(), title: "Target: " + url.substring(0, 15) + "...", author: "Unknown Entity", year: "2025", type: "WEB", tags: ["Infiltrated"], abstract: "Data successfully extracted from the target URL.", content: "Web content would be scraped here.", ocrStatus: 'complete' }; setPapers(prev => [newPaper, ...prev]); setActiveMenu('all'); setSelectedPaper(newPaper); playSfx('confirm'); };
-  const handleDeletePaper = (id: number, e: React.MouseEvent) => { e.stopPropagation(); if (window.confirm("DELETE THIS INTEL?")) { setPapers(prev => prev.filter(p => p.id !== id)); if (selectedPaper?.id === id) setSelectedPaper(null); playSfx('impact'); } };
-  const handleBulkDelete = (ids: number[]) => { setPapers(prev => prev.filter(p => !ids.includes(p.id))); if (selectedPaper && ids.includes(selectedPaper.id)) setSelectedPaper(null); playSfx('impact'); };
+  // NEW: Upload to Vault
+  const handleBulkImport = async (files: FileList) => { 
+      playSfx('confirm');
+      const newPapers: Paper[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (file.type !== 'application/pdf') continue;
+
+          // Optimistic UI update (optional, but let's wait for server for ID)
+          try {
+              const formData = new FormData();
+              formData.append('file', file);
+              
+              const res = await fetch('/api/upload', { method: 'POST', body: formData });
+              if (res.ok) {
+                  const p = await res.json();
+                  const mappedPaper = {
+                      ...p,
+                      type: "PDF",
+                      tags: ["New"],
+                      content: p.abstract,
+                      fileUrl: `/api/papers/${p.id}/pdf`
+                  };
+                  setPapers(prev => [mappedPaper, ...prev]);
+                  handleLevelUp('proficiency');
+              }
+          } catch (e) {
+              console.error("Upload failed:", e);
+          }
+      }
+      setActiveMenu('all');
+  };
+
+  const handleAddPaper = (url: string) => { 
+      // Keep mock web add for now
+      const newPaper: Paper = { id: Date.now(), title: "Target: " + url.substring(0, 15) + "...", author: "Unknown Entity", year: "2025", type: "WEB", tags: ["Infiltrated"], abstract: "Data successfully extracted.", content: "", ocrStatus: 'complete' }; 
+      setPapers(prev => [newPaper, ...prev]); 
+      playSfx('confirm'); 
+  };
+
+  const handleDeletePaper = async (id: number, e: React.MouseEvent) => { 
+      e.stopPropagation(); 
+      if (window.confirm("BURN THIS INTEL?")) { 
+          try {
+              await fetch(`/api/papers/${id}`, { method: 'DELETE' });
+              setPapers(prev => prev.filter(p => p.id !== id)); 
+              if (selectedPaper?.id === id) setSelectedPaper(null); 
+              playSfx('impact'); 
+          } catch (err) {
+              console.error("Delete failed:", err);
+          }
+      } 
+  };
+
+  const handleBulkDelete = (ids: number[]) => { 
+      // Bulk delete API not implemented yet, do one by one or mock
+      ids.forEach(id => handleDeletePaper(id, { stopPropagation: () => {} } as any));
+  };
+
   const handleThirdEye = async () => { if (!selectedPaper) return; playSfx('confirm'); const content = (selectedPaper.title + " " + selectedPaper.abstract).toLowerCase(); const aiTags = []; if (content.match(/vision|image/)) aiTags.push("CV"); if (content.match(/language|text/)) aiTags.push("NLP"); aiTags.push("DeepSeek-V3"); const updated = { ...selectedPaper, shadow_problem: "Obfuscated Truth", persona_solution: "Clarified Cognition", weakness_flaw: "Requires MP", tags: Array.from(new Set([...selectedPaper.tags, ...aiTags])) }; setPapers(prev => prev.map(p => p.id === updated.id ? updated : p)); setSelectedPaper(updated); handleLevelUp('proficiency'); };
   const handleAddFolder = () => { const name = window.prompt("ENTER MISSION NAME:"); if (name) { setFolders(prev => [...prev, { id: Date.now().toString(), name }]); handleLevelUp('kindness'); playSfx('confirm'); } };
   const handleDeleteFolder = (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (window.confirm("BURN EVIDENCE?")) { setFolders(prev => prev.filter(f => f.id !== id)); if (activeMenu === `folder_${id}`) setActiveMenu('all'); playSfx('impact'); } };
