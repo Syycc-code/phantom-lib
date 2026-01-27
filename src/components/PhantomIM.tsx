@@ -63,14 +63,17 @@ export default function PhantomIM() {
             const decoder = new TextDecoder();
             let done = false;
             let currentContent = "";
+            let buffer = "";
 
             while (!done) {
                 const { value, done: doneReading } = await reader.read();
                 done = doneReading;
-                if (done) break;
-
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
+                
+                const chunk = decoder.decode(value || new Uint8Array(), { stream: !done });
+                buffer += chunk;
+                
+                const lines = buffer.split('\n');
+                buffer = !done ? lines.pop() || "" : "";
                 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {

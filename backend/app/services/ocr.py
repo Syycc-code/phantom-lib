@@ -11,8 +11,8 @@ try:
     except Exception as e:
         print(f"[PHANTOM] OCR Engine: Fallback to CPU. ({e})")
         ocr_engine = RapidOCR()
-except ImportError:
-    print("[PHANTOM] RapidOCR not found.")
+except ImportError as e:
+    print(f"[PHANTOM] RapidOCR Import Failed: {e}")
     ocr_engine = None
 
 executor = ThreadPoolExecutor(max_workers=4)
@@ -22,9 +22,9 @@ def extract_text_from_file_sync(file_content: bytes, filename: str) -> str:
     try:
         if filename.lower().endswith(".pdf"):
             with fitz.open(stream=file_content, filetype="pdf") as doc:
-                # Optimized: Process 1 page for preview
-                target_pages = set(range(min(1, doc.page_count)))
-                for page_num in sorted(list(target_pages)):
+                # Process all pages
+                target_pages = range(doc.page_count)
+                for page_num in target_pages:
                     page = doc.load_page(page_num)
                     text = page.get_text()
                     # Skip OCR if text layer exists (>15 chars)

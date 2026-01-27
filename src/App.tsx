@@ -163,6 +163,7 @@ const INITIAL_STATS: PhantomStats = {
 // --- Components ---
 
 // --- Main App ---
+function App() {
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>(() => { const saved = localStorage.getItem('phantom_folders'); return saved ? JSON.parse(saved) : INITIAL_FOLDERS; });
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });

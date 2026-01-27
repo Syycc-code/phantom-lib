@@ -36,7 +36,35 @@ if RAG_AVAILABLE:
 
 def index_document(text: str, filename: str):
     if not RAG_AVAILABLE or not knowledge_collection or not embedder: return
-    chunks = [text[i:i+500] for i in range(0, len(text), 500)]
+    
+    # Robust chunking with overlap
+    chunk_size = 500
+    overlap = 100
+    chunks = []
+    start = 0
+    text_len = len(text)
+    
+    while start < text_len:
+        end = start + chunk_size
+        if end >= text_len:
+            chunks.append(text[start:])
+            break
+            
+        # Try to find a natural break point (newline, period, space)
+        break_found = False
+        for sep in ['\n', '. ', ' ']:
+            # Search in the last 20% of the candidate chunk
+            idx = text.rfind(sep, max(0, int(end - 100)), end)
+            if idx != -1:
+                end = idx + len(sep)
+                break_found = True
+                break
+        
+        chunks.append(text[start:end])
+        # Move start forward: if we found a break, we can overlap slightly or just continue
+        # To be safe and keep context, we always overlap
+        start = max(start + 1, end - overlap)
+        
     if not chunks: return
     
     embeddings = embedder.encode(chunks).tolist()
