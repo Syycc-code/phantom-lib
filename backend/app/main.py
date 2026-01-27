@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import os
 
 from app.core.config import settings
-from app.api.endpoints import papers, chat, monitor
+from app.api.endpoints import papers, chat, monitor, sync
 from app.services.rag import RAG_AVAILABLE
 from sqlmodel import SQLModel
 from app.api.deps import engine
@@ -37,3 +37,4 @@ app.add_middleware(
 app.include_router(monitor.router, prefix=settings.API_V1_STR, tags=["Monitor"])
 app.include_router(papers.router, prefix=settings.API_V1_STR, tags=["Papers"])
 app.include_router(chat.router, prefix=settings.API_V1_STR, tags=["Chat"])
+app.include_router(sync.router, prefix=settings.API_V1_STR + "/sync", tags=["Sync"])
