@@ -35,7 +35,11 @@ import {
   StatsOverlay,
   TransitionCurtain
 } from './components';
-import SystemMonitor from './components/SystemMonitor'; // Add import
+import SystemMonitor from './components/SystemMonitor';
+import { UploadProgress } from './components/shared/UploadProgress';
+import LeftPane from './components/panes/LeftPane';
+import MiddlePane from './components/panes/MiddlePane';
+import RightPane from './components/panes/RightPane';
 import type { Paper, Folder, PhantomStats } from './types';
 import { INITIAL_FOLDERS, INITIAL_PAPERS } from './constants';
 
@@ -158,161 +162,7 @@ const INITIAL_STATS: PhantomStats = {
 
 // --- Components ---
 
-const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onSyncConfig, playSfx }: any) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const isVelvet = activeMenu === 'velvet';
-  const systemItems = [{ icon: BookOpen, label: 'All References', id: 'all' }, { icon: Plus, label: 'Infiltrate (Add)', id: 'add' }, { icon: Gem, label: 'Velvet Room', id: 'velvet' }, { icon: Tag, label: 'Recent', id: 'recent' }];
-  return (<div className={`h-full border-r-4 p-6 flex flex-col text-white w-72 shrink-0 relative overflow-hidden z-20 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-phantom-red'}`}><div className="absolute top-0 left-0 w-full h-full bg-halftone opacity-50 pointer-events-none" /><div className="mb-10 relative transform -rotate-6 origin-top-left cursor-default"><h1 className={`text-6xl font-p5 tracking-tighter leading-none ${isVelvet ? 'text-[#D4AF37]' : 'text-white'}`} style={{ textShadow: isVelvet ? "2px 2px 0px #000" : "4px 4px 0px #E60012" }}>ARCHIVE</h1><div className="bg-white text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-1 ml-2">PHANTOM LIB V.2.7</div></div>
-  <div className="space-y-2 mb-6">
-      <button onClick={() => { onShowStats(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-white text-white p-2 hover:bg-white hover:text-black transition-colors w-full group"><User className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">PHANTOM STATS</span></button>
-      <button onClick={() => { onSyncConfig(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-zinc-500 text-zinc-400 p-2 hover:bg-phantom-red hover:text-white hover:border-black transition-colors w-full group"><BrainCircuit className="group-hover:animate-pulse" /><span className="font-p5 text-sm">SYNC LINK</span></button>
-  </div>
-  <nav className="space-y-4 z-10 mb-8">{systemItems.map((item) => (<button key={item.id} onClick={() => { setActiveMenu(item.id); playSfx('click'); }} className="relative w-full group cursor-pointer block text-left" onMouseEnter={() => playSfx('hover')}>{activeMenu === item.id && <div className={`absolute inset-0 bg-white shadow-[4px_4px_0px_#000] clip-path-slash ${isVelvet ? 'shadow-[#D4AF37]' : 'shadow-[#E60012]'}`} />}<div className={`relative flex items-center space-x-4 p-3 transform -skew-x-12 transition-colors duration-200 ${activeMenu === item.id ? 'text-black pl-8' : 'text-gray-400 hover:text-white'}`}><item.icon className={`w-6 h-6 ${activeMenu === item.id ? 'stroke-[3px]' : ''}`} /><span className="font-p5 text-xl tracking-wider uppercase">{item.label}</span></div></button>))}<input type="file" ref={fileInputRef} onChange={(e) => e.target.files && onBulkImport(e.target.files)} multiple className="hidden" /><button onClick={() => { fileInputRef.current?.click(); playSfx('click'); }} className="relative w-full group cursor-pointer block text-left" onMouseEnter={() => playSfx('hover')}><div className={`relative flex items-center space-x-4 p-3 transform -skew-x-12 hover:text-white transition-colors ${isVelvet ? 'text-[#D4AF37]' : 'text-phantom-yellow'}`}><Upload className="w-6 h-6" /><span className="font-p5 text-xl tracking-wider uppercase">BULK UPLOAD</span></div></button></nav><div className={`flex items-center justify-between border-b-2 pb-2 mb-4 z-10 ${isVelvet ? 'border-[#D4AF37]' : 'border-zinc-700'}`}><h3 className={`text-sm font-bold tracking-[0.2em] ${isVelvet ? 'text-[#D4AF37]' : 'text-phantom-red'}`}>MISSIONS</h3><button onClick={() => { onAddFolder(); playSfx('confirm'); }} className={`text-white hover:rotate-90 transition-all ${isVelvet ? 'hover:text-[#D4AF37]' : 'hover:text-phantom-red'}`}><PlusCircle size={18} /></button></div><div className="flex-1 overflow-y-auto z-10 space-y-2 pr-2 custom-scrollbar">{folders.map((folder: FolderType) => (<button key={folder.id} onClick={() => { setActiveMenu(`folder_${folder.id}`); playSfx('click'); }} onMouseEnter={() => playSfx('hover')} className={`relative w-full group cursor-pointer block text-left p-2 rounded-sm transition-all ${activeMenu === `folder_${folder.id}` ? 'bg-zinc-800 border-l-4' : 'hover:bg-zinc-900'} ${isVelvet && activeMenu === `folder_${folder.id}` ? 'border-[#D4AF37]' : 'border-phantom-red'}`}><div className="flex items-center justify-between"><div className="flex items-center space-x-3 overflow-hidden"><FolderIcon size={18} className={activeMenu === `folder_${folder.id}` ? 'text-white' : 'text-zinc-500'} /><span className={`font-p5 text-lg truncate ${activeMenu === `folder_${folder.id}` ? 'text-white' : 'text-zinc-400'}`}>{folder.name}</span></div><div onClick={(e) => { onDeleteFolder(folder.id, e); playSfx('cancel'); }} className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-1 transition-opacity"><Trash2 size={14} /></div></div></button>))}</div></div>);
-};
-
-const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onBulkDelete, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx }: any) => {
-    const [inputUrl, setInputUrl] = useState('');
-    const [isStealing, setIsStealing] = useState(false);
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    const isVelvet = activeMenu === 'velvet';
-    const filteredPapers = papers.filter((p: any) => { if (activeMenu === 'all' || activeMenu === 'velvet') return true; if (activeMenu === 'recent') return true; if (activeMenu.startsWith('folder_')) return p.folderId === activeMenu.split('folder_')[1]; return false; });
-    const handleSteal = (e: React.FormEvent) => { e.preventDefault(); setIsStealing(true); playSfx('confirm'); setTimeout(() => { onAddPaper(inputUrl); setInputUrl(''); setIsStealing(false); }, 1000); };
-    const toggleSelection = (id: number) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); playSfx('click'); };
-    const executeBulkDelete = () => { if (window.confirm(`BURN ${selectedIds.length} INTEL ITEMS?`)) { onBulkDelete(selectedIds); setSelectedIds([]); setIsSelectionMode(false); playSfx('impact'); } };
-    const startFusion = () => { setShowCurtain(true); setTimeout(() => { setIsFusing(true); setShowCurtain(false); }, 600); playSfx('confirm'); };
-
-    // JUICY INTERACTION VARIANTS
-    const cardVariants = {
-        hidden: { opacity: 0, x: -50, rotateX: 90 },
-        visible: (i: number) => ({ 
-            opacity: 1, 
-            x: 0, 
-            rotateX: 0,
-            transition: { delay: i * 0.05, type: "spring" }
-        }),
-        hover: { 
-            scale: 1.05, 
-            x: 20, 
-            skewX: -10,
-            backgroundColor: "#E60012",
-            color: "#FFF",
-            boxShadow: "10px 10px 0px rgba(0,0,0,1)",
-            zIndex: 10
-        },
-        tap: { scale: 0.95, x: 10, skewX: 0 },
-        selected: { 
-            x: 30, 
-            backgroundColor: "#000", 
-            color: "#E60012",
-            borderLeftWidth: "16px",
-            borderColor: "#E60012",
-            skewX: -5
-        }
-    };
-
-    return (<div className={`h-full flex-1 flex flex-col relative overflow-hidden transition-colors duration-500 ${isVelvet ? 'bg-[#000022]' : 'bg-[#161616]'}`}><div className={`h-24 flex items-center justify-between px-8 relative z-10 border-b-4 shrink-0 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-white'}`}><div className="absolute inset-0 bg-halftone opacity-30" /><div className="z-10 flex items-center"><h2 className={`text-4xl font-p5 tracking-wide transform -skew-x-12 uppercase truncate max-w-xs ${isVelvet ? 'text-[#D4AF37]' : 'text-white'}`}>{activeMenu === 'add' ? 'INFILTRATION' : activeMenu === 'velvet' ? 'VELVET ROOM' : 'MEMENTOS'}</h2>{isSelectionMode && !isVelvet && <span className="ml-4 bg-phantom-red text-black font-bold px-2 transform -skew-x-12">SELECT MODE</span>}</div>{!isVelvet && activeMenu !== 'add' && <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedIds([]); playSfx('click'); }} className={`z-10 p-2 rounded border-2 transition-all ${isSelectionMode ? 'bg-white text-black border-phantom-red' : 'text-zinc-500 border-zinc-700 hover:text-white'}`}><Trash2 size={20} /></button>}</div><div className="flex-1 overflow-y-auto p-6 space-y-4 z-10 custom-scrollbar bg-halftone relative">
-    {activeMenu !== 'add' ? (
-        <AnimatePresence>
-        {filteredPapers.map((paper: any, i: number) => { 
-            const isSelected = isVelvet ? fusionTargetIds.includes(paper.id) : (isSelectionMode ? selectedIds.includes(paper.id) : selectedId === paper.id); 
-            return (
-                <motion.div 
-                    key={paper.id} 
-                    layoutId={`paper-${paper.id}`}
-                    custom={i}
-                    variants={cardVariants}
-                    initial="hidden"
-                    animate={isSelected ? "selected" : "visible"}
-                    whileHover="hover"
-                    whileTap="tap"
-                    onClick={() => isVelvet ? toggleFusionSelection(paper.id) : (isSelectionMode ? toggleSelection(paper.id) : onSelect(paper))} 
-                    className={`relative p-5 cursor-pointer group transition-colors duration-100 transform border-2 border-transparent ${
-                        isSelected ? '' : 'bg-zinc-900 border-zinc-700 text-gray-300'
-                    }`}
-                    style={{ clipPath: "polygon(0 0, 100% 0, 98% 100%, 2% 98%)" }}
-                >
-                    {/* DECORATIVE SPIKE ON HOVER */}
-                    <div className="absolute -left-10 top-0 bottom-0 w-8 bg-black transform skew-x-12 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
-                    
-                    <div className="flex justify-between items-start relative z-10">
-                        <div>
-                            <h3 className="font-p5 text-2xl tracking-wide line-clamp-1">{paper.title}</h3>
-                            <div className="flex items-center space-x-2 mt-2 opacity-80 font-mono text-xs">
-                                <span className="bg-white/20 px-1">{paper.year}</span>
-                                <span>// {paper.author}</span>
-                            </div>
-                        </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Star className="fill-current" size={24} />
-                        </div>
-                    </div>
-                    {/* SELECTION INDICATOR */}
-                    {isSelected && <div className="absolute right-2 top-2 text-phantom-red"><Gem size={24} /></div>}
-                </motion.div>
-            );
-        })}
-        </AnimatePresence>
-    ) : (
-        <div className="h-full flex flex-col items-center justify-center p-10 text-center animate-in fade-in zoom-in duration-500">
-            <Upload size={80} className="text-phantom-red mb-6 animate-bounce" />
-            <h2 className="text-4xl font-p5 mb-4">DRAG & DROP INTEL</h2>
-            <p className="text-gray-400 max-w-md font-mono mb-8">
-                Target PDFs, Images, or Text Logs.<br/>
-                The system will automatically analyze and index the data.
-            </p>
-            <button 
-                onClick={() => document.querySelector('input[type="file"]')?.click()}
-                className="bg-phantom-red text-white px-8 py-3 text-2xl font-p5 border-4 border-black shadow-[8px_8px_0px_#fff] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"
-            >
-                SELECT FILES
-            </button>
-        </div>
-    )}
-    </div>{isSelectionMode && selectedIds.length > 0 && (<div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50"><button onClick={executeBulkDelete} className="bg-phantom-red text-white text-2xl font-p5 px-8 py-4 border-4 border-black shadow-[8px_8px_0px_#000] hover:bg-black hover:text-phantom-red transition-all flex items-center space-x-3"><Trash2 /><span>BURN ({selectedIds.length})</span></button></div>)}{isVelvet && fusionTargetIds.length === 2 && (<div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50"><button onClick={startFusion} className="bg-[#D4AF37] text-black text-3xl font-p5 px-12 py-6 border-4 border-white shadow-[0px_0px_20px_#D4AF37] hover:scale-110 transition-transform flex items-center space-x-3"><Combine size={32} /><span>EXECUTE FUSION</span></button></div>)}</div>);
-};
-
-const RightPane = ({ paper, onClose, onAnalyze, onRead, onSync, playSfx }: any) => {
-  const [analyzing, setAnalyzing] = useState(false);
-  const handleAnalyze = async () => { setAnalyzing(true); await onAnalyze(); setAnalyzing(false); };
-  return (<AnimatePresence>{paper && (<motion.div initial={{ x: "100%", skewX: -20 }} animate={{ x: 0, skewX: 0 }} exit={{ x: "100%", skewX: 20 }} transition={{ type: "spring", bounce: 0, duration: 0.4 }} className="w-[600px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex flex-col border-l-[12px] border-phantom-black"><div className="h-64 bg-phantom-red relative overflow-hidden flex items-end p-8 shrink-0 clip-path-jagged"><button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform"><X size={40} strokeWidth={4} /></button><div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" /><motion.h1 key={paper.id} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl font-p5 text-black leading-[0.9] transform -rotate-1 origin-bottom-left">{paper.title}</motion.h1></div><div className="flex-1 p-10 bg-zinc-100 overflow-y-auto"><div className="space-y-8"><div className="border-b-2 border-black pb-6"><div className="flex items-center justify-between mb-4"><div className="flex space-x-4 font-mono text-sm"><div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div><div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div></div><div className="flex space-x-2"><motion.button onClick={() => { onRead(); playSfx('confirm'); }} whileHover={{ scale: 1.1, rotate: 3 }} whileTap={{ scale: 0.9 }} className="flex items-center space-x-2 bg-phantom-red text-white px-4 py-2 font-p5 text-xl tracking-widest border-2 border-black shadow-[4px_4px_0px_#000] hover:bg-black hover:text-phantom-red transition-all"><Eye size={20} /> <span>READ</span></motion.button><motion.button onClick={() => { onSync(paper.id); }} whileHover={{ scale: 1.1, rotate: -3 }} whileTap={{ scale: 0.9 }} className="bg-black text-white p-2 border-2 border-zinc-500 hover:border-phantom-red hover:text-phantom-red transition-all"><BrainCircuit size={24} /></motion.button></div></div>{paper.tags.length > 0 && (<div className="flex flex-wrap gap-2 mt-2">{paper.tags.map((tag: string, i: number) => (<span key={i} className={`font-p5 text-lg px-3 py-1 transform -skew-x-12 border-2 border-black ${i % 2 === 0 ? 'bg-phantom-yellow text-black rotate-2' : 'bg-phantom-black text-white -rotate-1'}`}>#{tag.toUpperCase()}</span>))}</div>)}</div><p className="font-serif text-xl italic text-gray-800 leading-relaxed pl-6 border-l-4 border-phantom-red">"{paper.abstract}"</p>{!paper.shadow_problem ? (<motion.button onClick={handleAnalyze} disabled={analyzing} whileHover={{ scale: 1.02, x: 5 }} className="w-full py-8 bg-black text-phantom-red font-p5 text-3xl tracking-widest flex items-center justify-center space-x-4 group border-4 border-transparent hover:border-phantom-red transition-all">{analyzing ? <BrainCircuit className="w-10 h-10 animate-spin text-white" /> : <><BrainCircuit className="w-8 h-8 group-hover:animate-pulse" /> <span>ACTIVATE THIRD EYE</span></>}</motion.button>) : (<div className="space-y-6 pt-4"><h2 className="text-4xl font-p5 text-center bg-black text-white transform -skew-x-12 py-2">TRUTH REVEALED</h2><div className="grid gap-4"><motion.div initial={{x:-50, opacity:0}} animate={{x:0, opacity:1}} className="bg-[#222] p-5 text-white shadow-[6px_6px_0px_#E60012] transform -rotate-1"><h4 className="text-phantom-red font-bold uppercase tracking-widest text-xs">Shadow</h4><p className="font-p5 text-2xl">{paper.shadow_problem}</p></motion.div><motion.div initial={{x:50, opacity:0}} animate={{x:0, opacity:1}} transition={{delay:0.1}} className="bg-white border-4 border-black p-5 text-black shadow-[6px_6px_0px_#222] transform rotate-1"><h4 className="text-gray-500 font-bold uppercase tracking-widest text-xs">Persona</h4><p className="font-p5 text-2xl">{paper.persona_solution}</p></motion.div><motion.div initial={{y:20, opacity:0}} animate={{y:0, opacity:1}} transition={{delay:0.2}} className="bg-phantom-yellow border-4 border-black p-4 text-black transform -skew-x-6"><h4 className="text-black font-bold uppercase tracking-widest text-xs">Weakness</h4><p className="font-mono font-bold text-lg text-red-600">{paper.weakness_flaw}</p></motion.div></div></div>)}</div></div></motion.div>)}</AnimatePresence>);
-};
-
-const UploadProgress = ({ active, current, total }: { active: boolean, current: number, total: number }) => {
-    return (
-        <AnimatePresence>
-            {active && (
-                <motion.div 
-                    initial={{ y: 100 }} 
-                    animate={{ y: 0 }} 
-                    exit={{ y: 100 }} 
-                    className="fixed bottom-0 left-0 w-full z-[200] pointer-events-none"
-                >
-                    <div className="bg-phantom-black border-t-4 border-phantom-red p-4 flex items-center justify-between relative overflow-hidden">
-                        <div className="absolute inset-0 bg-halftone opacity-20" />
-                        <div className="flex items-center space-x-4 z-10">
-                            <Loader2 className="animate-spin text-phantom-red w-8 h-8" />
-                            <div className="text-white font-p5 text-2xl tracking-widest">
-                                INFILTRATING TARGETS... {current} / {total}
-                            </div>
-                        </div>
-                        <div className="h-4 bg-zinc-800 w-96 transform -skew-x-12 overflow-hidden border-2 border-white">
-                            <motion.div 
-                                className="h-full bg-phantom-red" 
-                                initial={{ width: 0 }} 
-                                animate={{ width: `${(current / total) * 100}%` }} 
-                            />
-                        </div>
-                    </div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
-};
-
 // --- Main App ---
-
-function App() {
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>(() => { const saved = localStorage.getItem('phantom_folders'); return saved ? JSON.parse(saved) : INITIAL_FOLDERS; });
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });

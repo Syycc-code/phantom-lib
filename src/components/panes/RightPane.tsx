@@ -1,131 +1,131 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, BrainCircuit, AlertTriangle, Lightbulb, ShieldAlert } from 'lucide-react';
-import type { Paper } from '../../types';
+import { X, Eye, Loader2, BrainCircuit } from 'lucide-react';
 
 interface RightPaneProps {
-  paper: Paper | null;
-  onClose: () => void;
-  onAnalyze: () => void;
+    paper: any; // Todo: Fix type
+    onClose: () => void;
+    onAnalyze: () => void;
+    onRead: () => void;
+    onSync: (id: number) => void;
+    playSfx: (type: any) => void;
 }
 
-export default function RightPane({ paper, onClose, onAnalyze }: RightPaneProps) {
+const RightPane = ({ paper, onClose, onAnalyze, onRead, onSync, playSfx }: RightPaneProps) => {
   const [analyzing, setAnalyzing] = useState(false);
-
-  const handleAnalyzeClick = async () => {
-    setAnalyzing(true);
-    await onAnalyze();
-    setAnalyzing(false);
+  
+  const handleAnalyze = async () => { 
+      setAnalyzing(true); 
+      await onAnalyze(); 
+      setAnalyzing(false); 
   };
-
-  const hasAnalysis = paper?.shadow_problem;
 
   return (
     <AnimatePresence>
-      {paper && (
-        <motion.div
-          initial={{ x: "100%", skewX: -10, opacity: 0 }}
-          animate={{ x: 0, skewX: 0, opacity: 1 }}
-          exit={{ x: "100%", skewX: 10, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="w-[500px] bg-white h-full shadow-2xl relative z-50 flex flex-col border-l-8 border-phantom-black overflow-hidden"
-        >
-          {/* Header */}
-          <div className="h-48 bg-phantom-red relative overflow-hidden flex items-end p-6 shrink-0">
-            <div className="absolute top-0 right-0 p-4 z-20">
-               <button onClick={onClose} className="text-black hover:text-white transition-colors">
-                 <X size={32} strokeWidth={3} />
-               </button>
-            </div>
-            <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+        {paper && (
             <motion.div 
-              key={paper.id}
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className="relative z-10"
+                initial={{ x: "100%", skewX: -20 }} 
+                animate={{ x: 0, skewX: 0 }} 
+                exit={{ x: "100%", skewX: 20 }} 
+                transition={{ type: "spring", bounce: 0, duration: 0.4 }} 
+                className="w-[600px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex flex-col border-l-[12px] border-phantom-black"
             >
-              <h1 className="text-3xl font-black text-black leading-none uppercase italic transform -rotate-1 origin-bottom-left line-clamp-3">
-                {paper.title}
-              </h1>
+                <div className="h-64 bg-phantom-red relative overflow-hidden flex items-end p-8 shrink-0 clip-path-jagged">
+                    <button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform">
+                        <X size={40} strokeWidth={4} />
+                    </button>
+                    <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
+                    <motion.h1 
+                        key={paper.id} 
+                        initial={{ y: 20, opacity: 0 }} 
+                        animate={{ y: 0, opacity: 1 }} 
+                        className="text-5xl font-p5 text-black leading-[0.9] transform -rotate-1 origin-bottom-left"
+                    >
+                        {paper.title}
+                    </motion.h1>
+                </div>
+                
+                <div className="flex-1 p-10 bg-zinc-100 overflow-y-auto">
+                    <div className="space-y-8">
+                        <div className="border-b-2 border-black pb-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex space-x-4 font-mono text-sm">
+                                    <div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div>
+                                    <div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div>
+                                </div>
+                                <div className="flex space-x-2">
+                                    <motion.button 
+                                        onClick={() => { onRead(); playSfx('confirm'); }} 
+                                        whileHover={{ scale: 1.1, rotate: 3 }} 
+                                        whileTap={{ scale: 0.9 }} 
+                                        className="flex items-center space-x-2 bg-phantom-red text-white px-4 py-2 font-p5 text-xl tracking-widest border-2 border-black shadow-[4px_4px_0px_#000] hover:bg-black hover:text-phantom-red transition-all"
+                                    >
+                                        <Eye size={20} /> <span>READ</span>
+                                    </motion.button>
+                                    <motion.button 
+                                        onClick={() => { onSync(paper.id); }} 
+                                        whileHover={{ scale: 1.1, rotate: -3 }} 
+                                        whileTap={{ scale: 0.9 }} 
+                                        className="bg-black text-white p-2 border-2 border-zinc-500 hover:border-phantom-red hover:text-phantom-red transition-all"
+                                    >
+                                        <BrainCircuit size={24} />
+                                    </motion.button>
+                                </div>
+                            </div>
+                            {paper.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {paper.tags.map((tag: string, i: number) => (
+                                        <span key={i} className={`font-p5 text-lg px-3 py-1 transform -skew-x-12 border-2 border-black ${i % 2 === 0 ? 'bg-phantom-yellow text-black' : 'bg-transparent text-black'}`}>
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {!paper.shadow_problem ? (
+                                <div className="p-6 border-4 border-dashed border-gray-400 text-center">
+                                    <p className="font-p5 text-2xl text-gray-400 mb-4">UNKOWN COGNITION</p>
+                                    <motion.button 
+                                        onClick={handleAnalyze} 
+                                        disabled={analyzing} 
+                                        whileHover={{ scale: 1.05 }} 
+                                        whileTap={{ scale: 0.95 }} 
+                                        className="bg-black text-white font-p5 text-xl px-6 py-3 border-2 border-phantom-red shadow-[4px_4px_0px_#E60012] flex items-center justify-center mx-auto space-x-2"
+                                    >
+                                        {analyzing ? <Loader2 className="animate-spin" /> : <Eye className="text-phantom-red" />}
+                                        <span>ACTIVATE THIRD EYE</span>
+                                    </motion.button>
+                                </div>
+                            ) : (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                                    <div className="bg-black text-white p-4 transform skew-x-[-2deg] shadow-lg border-l-4 border-phantom-red">
+                                        <h3 className="font-p5 text-xl text-phantom-red mb-2">SHADOW (PROBLEM)</h3>
+                                        <p className="font-mono text-sm leading-relaxed">{paper.shadow_problem}</p>
+                                    </div>
+                                    <div className="bg-white border-2 border-black p-4 transform skew-x-[1deg] shadow-lg">
+                                        <h3 className="font-p5 text-xl text-black mb-2">PERSONA (SOLUTION)</h3>
+                                        <p className="font-mono text-sm leading-relaxed">{paper.persona_solution}</p>
+                                    </div>
+                                    <div className="bg-zinc-800 text-gray-300 p-4 transform skew-x-[-1deg] shadow-lg border-r-4 border-phantom-blue">
+                                        <h3 className="font-p5 text-xl text-phantom-blue mb-2">WEAKNESS (FLAW)</h3>
+                                        <p className="font-mono text-sm leading-relaxed">{paper.weakness_flaw}</p>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </div>
+                        
+                        <div className="mt-8 pt-8 border-t-2 border-black">
+                            <h3 className="font-p5 text-2xl mb-4">ABSTRACT</h3>
+                            <p className="font-serif text-lg leading-relaxed text-gray-800">{paper.abstract}</p>
+                        </div>
+                    </div>
+                </div>
             </motion.div>
-          </div>
-
-          {/* Body */}
-          <div className="flex-1 p-8 bg-zinc-50 overflow-y-auto custom-scrollbar">
-             <div className="space-y-6">
-                {/* Metadata Box */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-100 p-3 rounded-sm border-l-4 border-gray-400">
-                    <span className="block text-[10px] text-gray-500 uppercase tracking-widest">Author</span>
-                    <span className="font-bold text-sm">{paper.author}</span>
-                  </div>
-                  <div className="bg-gray-100 p-3 rounded-sm border-l-4 border-gray-400">
-                     <span className="block text-[10px] text-gray-500 uppercase tracking-widest">Year</span>
-                     <span className="font-bold text-sm">{paper.year}</span>
-                  </div>
-                </div>
-
-                {/* Abstract Section */}
-                <div className="text-sm text-gray-600 leading-relaxed font-serif italic border-l-2 border-phantom-red pl-4 opacity-80">
-                    "{paper.abstract ? paper.abstract.substring(0, 150) + "..." : "No abstract available."}"
-                </div>
-
-                {/* ANALYSIS SECTION */}
-                {!hasAnalysis ? (
-                    <motion.button
-                      onClick={handleAnalyzeClick}
-                      disabled={analyzing}
-                      whileHover={{ scale: 1.02, backgroundColor: "#000", color: "#FCEC0C" }}
-                      whileTap={{ scale: 0.98 }}
-                      className="w-full mt-4 py-6 bg-phantom-red text-white font-black text-xl italic tracking-tighter shadow-lg flex items-center justify-center space-x-3 group relative overflow-hidden clip-path-jagged"
-                    >
-                      {analyzing ? (
-                          <BrainCircuit className="w-8 h-8 animate-spin" />
-                      ) : (
-                          <>
-                            <BrainCircuit className="w-6 h-6 animate-pulse" />
-                            <span>ACTIVATE THIRD EYE</span>
-                          </>
-                      )}
-                    </motion.button>
-                ) : (
-                    <motion.div 
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="space-y-4 mt-8"
-                    >
-                        <div className="flex items-center space-x-2 mb-4">
-                            <div className="h-1 flex-1 bg-black"></div>
-                            <span className="font-black text-xl italic tracking-tighter bg-black text-white px-2 transform -skew-x-12">TRUTH REVEALED</span>
-                            <div className="h-1 flex-1 bg-black"></div>
-                        </div>
-
-                        {/* CARD 1: SHADOW */}
-                        <div className="bg-[#222] text-white p-4 relative overflow-hidden group hover:-translate-y-1 transition-transform">
-                             <div className="absolute top-0 right-0 p-2 opacity-20"><AlertTriangle size={48} /></div>
-                             <h4 className="text-phantom-red font-bold uppercase tracking-widest text-xs mb-1">The Shadow (Problem)</h4>
-                             <p className="font-serif text-lg leading-tight">{paper.shadow_problem}</p>
-                        </div>
-
-                        {/* CARD 2: PERSONA */}
-                        <div className="bg-[#E60012] text-black p-4 relative overflow-hidden group hover:-translate-y-1 transition-transform">
-                             <div className="absolute top-0 right-0 p-2 opacity-20"><Lightbulb size={48} /></div>
-                             <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-1">The Persona (Solution)</h4>
-                             <p className="font-bold text-lg leading-tight italic">{paper.persona_solution}</p>
-                        </div>
-
-                        {/* CARD 3: WEAKNESS */}
-                        <div className="bg-white border-4 border-black text-black p-4 relative overflow-hidden group hover:-translate-y-1 transition-transform">
-                             <div className="absolute top-0 right-0 p-2 opacity-10"><ShieldAlert size={48} /></div>
-                             <h4 className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-1">Weakness (Flaw)</h4>
-                             <p className="font-mono text-sm leading-tight text-red-600">{paper.weakness_flaw}</p>
-                        </div>
-                    </motion.div>
-                )}
-             </div>
-          </div>
-        </motion.div>
-      )}
+        )}
     </AnimatePresence>
   );
-}
+};
+
+export default RightPane;
