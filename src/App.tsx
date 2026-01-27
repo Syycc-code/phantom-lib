@@ -33,7 +33,8 @@ import {
   FusionWorkspace,
   RankUpNotification,
   StatsOverlay,
-  TransitionCurtain
+  TransitionCurtain,
+  CallingCard
 } from './components';
 import SystemMonitor from './components/SystemMonitor';
 import { UploadProgress } from './components/shared/UploadProgress';
@@ -206,6 +207,7 @@ function App() {
   const [fusionResult, setFusionResult] = useState<string | null>(null);
   const [showCurtain, setShowCurtain] = useState(false);
   const [showRankUp, setShowRankUp] = useState<string | null>(null);
+  const [showCallingCard, setShowCallingCard] = useState<'success' | 'fail' | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0 });
   
@@ -277,11 +279,70 @@ function App() {
       }, 2000);
   };
 
-  const handleAddPaper = (url: string) => { 
-      // Keep mock web add for now
-      const newPaper: Paper = { id: Date.now(), title: "Target: " + url.substring(0, 15) + "...", author: "Unknown Entity", year: "2025", type: "WEB", tags: ["Infiltrated"], abstract: "Data successfully extracted.", content: "", ocrStatus: 'complete' }; 
-      setPapers(prev => [newPaper, ...prev]); 
-      playSfx('confirm'); 
+  const handleAddPaper = async (url: string) => { 
+      playSfx('confirm');
+      try {
+          const res = await fetch('/api/upload/url', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url })
+          });
+          
+          if (res.ok) {
+              const p = await res.json();
+              const mappedPaper = {
+                  ...p,
+                  type: "WEB",
+                  tags: ["Infiltrated"],
+                  content: p.abstract,
+                  fileUrl: `/api/papers/${p.id}/pdf`
+              };
+              setPapers(prev => [mappedPaper, ...prev]);
+              handleLevelUp('proficiency');
+              
+              // Show Calling Card
+              setShowCallingCard('success');
+              
+              // Trigger Download
+              const link = document.createElement('a');
+              link.href = mappedPaper.fileUrl;
+              link.download = p.title + ".pdf";
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+          } else {
+              throw new Error("Hack Failed");
+          }
+      } catch (e) {
+          console.error("URL Upload Failed:", e);
+          playSfx('cancel');
+          alert("TARGET LINK SEVERED. (Check URL or Network)");
+      }
+  };
+
+  const handleSaveNote = async (content: string) => {
+      if (!selectedPaper) return;
+      try {
+          const res = await fetch(`/api/papers/${selectedPaper.id}/notes`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content })
+          });
+          
+          if (res.ok) {
+              // Optimistic Update
+              setPapers(prev => prev.map(p => 
+                  p.id === selectedPaper.id ? { ...p, user_notes: content } : p
+              ));
+              // Update selectedPaper too to sync state
+              setSelectedPaper(prev => prev ? { ...prev, user_notes: content } : null);
+          } else {
+              throw new Error("Save failed");
+          }
+      } catch (e) {
+          console.error("Note Save Error", e);
+          throw e; // Let NoteEditor handle UI error state
+      }
   };
 
   const handleDeletePaper = async (id: number, e: React.MouseEvent) => { 
@@ -303,7 +364,41 @@ function App() {
       ids.forEach(id => handleDeletePaper(id, { stopPropagation: () => {} } as any));
   };
 
-  const handleThirdEye = async () => { if (!selectedPaper) return; playSfx('confirm'); const content = (selectedPaper.title + " " + selectedPaper.abstract).toLowerCase(); const aiTags = []; if (content.match(/vision|image/)) aiTags.push("CV"); if (content.match(/language|text/)) aiTags.push("NLP"); aiTags.push("DeepSeek-V3"); const updated = { ...selectedPaper, shadow_problem: "Obfuscated Truth", persona_solution: "Clarified Cognition", weakness_flaw: "Requires MP", tags: Array.from(new Set([...selectedPaper.tags, ...aiTags])) }; setPapers(prev => prev.map(p => p.id === updated.id ? updated : p)); setSelectedPaper(updated); handleLevelUp('proficiency'); };
+  const handleThirdEye = async () => { 
+      if (!selectedPaper) return; 
+      playSfx('confirm'); 
+      try {
+          const res = await fetch('/api/mind_hack', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  text: selectedPaper.abstract, // Use abstract for analysis
+                  mode: 'analyze_paper' 
+              })
+          });
+          const data = await res.json();
+          
+          if (data.raw) {
+              const analysis = data.raw;
+              const updated = { 
+                  ...selectedPaper, 
+                  shadow_problem: analysis.shadow_problem, 
+                  persona_solution: analysis.persona_solution, 
+                  weakness_flaw: analysis.weakness_flaw, 
+                  tags: analysis.tags || selectedPaper.tags 
+              }; 
+              // Update state
+              setPapers(prev => prev.map(p => p.id === updated.id ? updated : p)); 
+              setSelectedPaper(updated); 
+              handleLevelUp('proficiency');
+          } else {
+              // Fallback if raw JSON missing
+              console.warn("Analysis returned non-JSON format", data);
+          }
+      } catch (e) {
+          console.error("Third Eye Failed:", e);
+      }
+  };
   
   // SYNC: Configure Obsidian Path
   const handleSyncConfig = async () => {
@@ -348,6 +443,7 @@ function App() {
       <SystemMonitor /> {/* Add Monitor */}
       <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
       <TransitionCurtain isActive={showCurtain} />
+      <CallingCard show={showCallingCard === 'success'} onComplete={() => { setShowCallingCard(null); setActiveMenu('all'); }} />
       <RankUpNotification stat={showRankUp} />
       {showStats && <StatsOverlay stats={stats} onClose={() => setShowStats(false)} playSfx={playSfx} />}
       <LeftPane activeMenu={activeMenu} setActiveMenu={setActiveMenu} folders={folders} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onBulkImport={handleBulkImport} onShowStats={() => { setShowStats(true); playSfx('confirm'); }} onSyncConfig={handleSyncConfig} playSfx={playSfx} />
@@ -374,7 +470,14 @@ function App() {
         />
       </div>
       <div className="relative">
-         <RightPane paper={selectedPaper} onClose={() => setSelectedPaper(null)} onAnalyze={handleThirdEye} onRead={() => handleRead()} onSync={handleSyncPaper} playSfx={playSfx} />
+         <RightPane 
+            paper={selectedPaper} 
+            onClose={() => setSelectedPaper(null)} 
+            onAnalyze={handleThirdEye} 
+            onRead={() => handleRead()} 
+            playSfx={playSfx}
+            onSaveNote={handleSaveNote}
+         />
       </div>
       <AnimatePresence>
         {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} />}

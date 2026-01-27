@@ -80,10 +80,28 @@ async def chat_stream(request: ChatRequest):
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+from app.services.analysis import analyze_paper_content
+
 @router.post("/mind_hack")
 async def mind_hack(request: MindHackRequest):
     system_metrics["ai_state"] = "THINKING"
     try:
+        # If mode is analyze_paper, we use the specialized service
+        if request.mode == "analyze_paper":
+            # request.text here is assumed to be the abstract or full text
+            result = await analyze_paper_content(request.text)
+            # Convert JSON result to string for display or further processing
+            # Or just return the raw JSON if frontend expects it
+            # For compatibility with frontend expecting {"result": str}, we format it:
+            formatted_res = (
+                f"TAGS: {', '.join(result.get('tags', []))}\n\n"
+                f"SHADOW: {result.get('shadow_problem')}\n"
+                f"PERSONA: {result.get('persona_solution')}\n"
+                f"FLAW: {result.get('weakness_flaw')}"
+            )
+            system_metrics["ai_state"] = "IDLE"
+            return {"result": formatted_res, "raw": result}
+
         sys_prompt = SYSTEM_PROMPTS["MIND_HACK_TRANSLATE"] if request.mode == "translate" else SYSTEM_PROMPTS["MIND_HACK_ANALYZE"]
         response = await deepseek_client.chat.completions.create(
             model="deepseek-chat",

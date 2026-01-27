@@ -10,7 +10,7 @@ interface LeftPaneProps {
     onDeleteFolder: (id: string, e: React.MouseEvent) => void;
     onBulkImport: (files: FileList) => void;
     onShowStats: () => void;
-    onSyncConfig: () => void;
+    onSyncConfig: () => void; // Kept for backward compat but unused in UI
     playSfx: (type: any) => void;
 }
 
@@ -34,7 +34,6 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
         
         <div className="space-y-2 mb-6">
             <button onClick={() => { onShowStats(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-white text-white p-2 hover:bg-white hover:text-black transition-colors w-full group"><User className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">PHANTOM STATS</span></button>
-            <button onClick={() => { onSyncConfig(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-zinc-500 text-zinc-400 p-2 hover:bg-phantom-red hover:text-white hover:border-black transition-colors w-full group"><BrainCircuit className="group-hover:animate-pulse" /><span className="font-p5 text-sm">SYNC LINK</span></button>
         </div>
 
         <nav className="space-y-4 z-10 mb-8">

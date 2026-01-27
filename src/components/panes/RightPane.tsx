@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Eye, Loader2, BrainCircuit } from 'lucide-react';
+import { X, Eye, Loader2 } from 'lucide-react';
+import { NoteEditor } from '../shared/NoteEditor';
 
 interface RightPaneProps {
     paper: any; // Todo: Fix type
     onClose: () => void;
     onAnalyze: () => void;
     onRead: () => void;
-    onSync: (id: number) => void;
     playSfx: (type: any) => void;
+    onSaveNote: (content: string) => Promise<void>;
 }
 
-const RightPane = ({ paper, onClose, onAnalyze, onRead, onSync, playSfx }: RightPaneProps) => {
+const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote }: RightPaneProps) => {
   const [analyzing, setAnalyzing] = useState(false);
   
   const handleAnalyze = async () => { 
@@ -28,65 +29,59 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, onSync, playSfx }: Right
                 animate={{ x: 0, skewX: 0 }} 
                 exit={{ x: "100%", skewX: 20 }} 
                 transition={{ type: "spring", bounce: 0, duration: 0.4 }} 
-                className="w-[600px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex flex-col border-l-[12px] border-phantom-black"
+                className="w-[800px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex border-l-[12px] border-phantom-black"
             >
-                <div className="h-64 bg-phantom-red relative overflow-hidden flex items-end p-8 shrink-0 clip-path-jagged">
-                    <button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform">
-                        <X size={40} strokeWidth={4} />
-                    </button>
-                    <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
-                    <motion.h1 
-                        key={paper.id} 
-                        initial={{ y: 20, opacity: 0 }} 
-                        animate={{ y: 0, opacity: 1 }} 
-                        className="text-5xl font-p5 text-black leading-[0.9] transform -rotate-1 origin-bottom-left"
-                    >
-                        {paper.title}
-                    </motion.h1>
-                </div>
-                
-                <div className="flex-1 p-10 bg-zinc-100 overflow-y-auto">
-                    <div className="space-y-8">
-                        <div className="border-b-2 border-black pb-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex space-x-4 font-mono text-sm">
-                                    <div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div>
-                                    <div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div>
+                {/* Main Content (Left) */}
+                <div className="flex-1 flex flex-col h-full border-r-2 border-black">
+                    <div className="h-64 bg-phantom-red relative overflow-hidden flex items-end p-8 shrink-0 clip-path-jagged">
+                        <button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform">
+                            <X size={40} strokeWidth={4} />
+                        </button>
+                        <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
+                        <motion.h1 
+                            key={paper.id} 
+                            initial={{ y: 20, opacity: 0 }} 
+                            animate={{ y: 0, opacity: 1 }} 
+                            className="text-5xl font-p5 text-black leading-[0.9] transform -rotate-1 origin-bottom-left"
+                        >
+                            {paper.title}
+                        </motion.h1>
+                    </div>
+                    
+                    <div className="flex-1 p-10 bg-zinc-100 overflow-y-auto">
+                        <div className="space-y-8">
+                            <div className="border-b-2 border-black pb-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex space-x-4 font-mono text-sm">
+                                        <div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div>
+                                        <div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <motion.button 
+                                            onClick={() => { onRead(); playSfx('confirm'); }} 
+                                            whileHover={{ scale: 1.1, rotate: 3 }} 
+                                            whileTap={{ scale: 0.9 }} 
+                                            className="flex items-center space-x-2 bg-phantom-red text-white px-4 py-2 font-p5 text-xl tracking-widest border-2 border-black shadow-[4px_4px_0px_#000] hover:bg-black hover:text-phantom-red transition-all"
+                                        >
+                                            <Eye size={20} /> <span>READ</span>
+                                        </motion.button>
+                                    </div>
                                 </div>
-                                <div className="flex space-x-2">
-                                    <motion.button 
-                                        onClick={() => { onRead(); playSfx('confirm'); }} 
-                                        whileHover={{ scale: 1.1, rotate: 3 }} 
-                                        whileTap={{ scale: 0.9 }} 
-                                        className="flex items-center space-x-2 bg-phantom-red text-white px-4 py-2 font-p5 text-xl tracking-widest border-2 border-black shadow-[4px_4px_0px_#000] hover:bg-black hover:text-phantom-red transition-all"
-                                    >
-                                        <Eye size={20} /> <span>READ</span>
-                                    </motion.button>
-                                    <motion.button 
-                                        onClick={() => { onSync(paper.id); }} 
-                                        whileHover={{ scale: 1.1, rotate: -3 }} 
-                                        whileTap={{ scale: 0.9 }} 
-                                        className="bg-black text-white p-2 border-2 border-zinc-500 hover:border-phantom-red hover:text-phantom-red transition-all"
-                                    >
-                                        <BrainCircuit size={24} />
-                                    </motion.button>
-                                </div>
+                                {paper.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {paper.tags.map((tag: string, i: number) => (
+                                            <span key={i} className={`font-p5 text-lg px-3 py-1 transform -skew-x-12 border-2 border-black ${i % 2 === 0 ? 'bg-phantom-yellow text-black' : 'bg-transparent text-black'}`}>
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                            {paper.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {paper.tags.map((tag: string, i: number) => (
-                                        <span key={i} className={`font-p5 text-lg px-3 py-1 transform -skew-x-12 border-2 border-black ${i % 2 === 0 ? 'bg-phantom-yellow text-black' : 'bg-transparent text-black'}`}>
-                                            {tag}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="space-y-4">
-                            {!paper.shadow_problem ? (
-                                <div className="p-6 border-4 border-dashed border-gray-400 text-center">
-                                    <p className="font-p5 text-2xl text-gray-400 mb-4">UNKOWN COGNITION</p>
+                            
+                            <div className="space-y-4">
+                                {!paper.shadow_problem ? (
+                                    <div className="p-6 border-4 border-dashed border-gray-400 text-center">
+                                        <p className="font-p5 text-2xl text-gray-400 mb-4">UNKOWN COGNITION</p>
                                     <motion.button 
                                         onClick={handleAnalyze} 
                                         disabled={analyzing} 
@@ -112,15 +107,29 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, onSync, playSfx }: Right
                                         <h3 className="font-p5 text-xl text-phantom-blue mb-2">WEAKNESS (FLAW)</h3>
                                         <p className="font-mono text-sm leading-relaxed">{paper.weakness_flaw}</p>
                                     </div>
+                                    {/* Re-Analyze Button (Optional, for re-running) */}
+                                    <button onClick={handleAnalyze} className="text-xs text-gray-400 hover:text-black underline w-full text-center">
+                                        {analyzing ? "Recalibrating..." : "Recalibrate Analysis"}
+                                    </button>
                                 </motion.div>
                             )}
-                        </div>
-                        
-                        <div className="mt-8 pt-8 border-t-2 border-black">
-                            <h3 className="font-p5 text-2xl mb-4">ABSTRACT</h3>
-                            <p className="font-serif text-lg leading-relaxed text-gray-800">{paper.abstract}</p>
+                            </div>
+                            
+                            <div className="mt-8 pt-8 border-t-2 border-black">
+                                <h3 className="font-p5 text-2xl mb-4">ABSTRACT</h3>
+                                <p className="font-serif text-lg leading-relaxed text-gray-800">{paper.abstract}</p>
+                            </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Note Editor (Right Side) */}
+                <div className="w-[300px] h-full shrink-0">
+                    <NoteEditor 
+                        initialContent={paper.user_notes} 
+                        paperId={paper.id} 
+                        onSave={onSaveNote} 
+                    />
                 </div>
             </motion.div>
         )}

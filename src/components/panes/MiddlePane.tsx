@@ -184,6 +184,19 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                             Target PDFs, Images, or Text Logs.<br/>
                             The system will automatically analyze and index the data.
                         </p>
+                        
+                        <form onSubmit={handleSteal} className="w-full max-w-md mb-8 flex gap-2">
+                            <input 
+                                value={inputUrl}
+                                onChange={(e) => setInputUrl(e.target.value)}
+                                placeholder="TARGET URL (ARXIV / PDF)..." 
+                                className="flex-1 bg-black border-2 border-phantom-red text-white px-4 py-2 font-mono outline-none focus:bg-zinc-900"
+                            />
+                            <button type="submit" disabled={isStealing} className="bg-phantom-red text-black font-bold px-4 hover:bg-white transition-colors">
+                                {isStealing ? 'STEALING...' : 'HACK'}
+                            </button>
+                        </form>
+
                         <button 
                             onClick={() => document.getElementById('middle-pane-upload')?.click()}
                             className="bg-phantom-red text-white px-8 py-3 text-2xl font-p5 border-4 border-black shadow-[8px_8px_0px_#fff] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"

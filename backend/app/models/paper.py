@@ -18,6 +18,9 @@ class Paper(PaperBase, table=True):
     shadow_problem: Optional[str] = None
     persona_solution: Optional[str] = None
     weakness_flaw: Optional[str] = None
+    
+    # Phantom Notes
+    user_notes: Optional[str] = None
 
 class PaperCreate(PaperBase):
     pass
@@ -28,3 +31,4 @@ class PaperRead(PaperBase):
     shadow_problem: Optional[str]
     persona_solution: Optional[str]
     weakness_flaw: Optional[str]
+    user_notes: Optional[str] = None

@@ -4,6 +4,7 @@
  */
 
 export { RankUpNotification } from './notifications/RankUpNotification';
+export { CallingCard } from './notifications/CallingCard';
 export { TransitionCurtain, ShatterEffect } from './transitions';
 export { StatsOverlay } from './overlays/StatsOverlay';
 export { SubwayOverlay } from './overlays/SubwayOverlay';
