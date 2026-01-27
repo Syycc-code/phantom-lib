@@ -480,7 +480,7 @@ function App() {
          />
       </div>
       <AnimatePresence>
-        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} />}
+        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} />}
         {showSubway && <SubwayOverlay papers={papers} folders={folders} onClose={() => setShowSubway(false)} onRead={handleRead} playSfx={playSfx} />}
         {fusionResult && fusionTargetIds.length === 2 && (
             <FusionWorkspace 

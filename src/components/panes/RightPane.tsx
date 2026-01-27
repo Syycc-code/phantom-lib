@@ -29,15 +29,15 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote }: R
                 animate={{ x: 0, skewX: 0 }} 
                 exit={{ x: "100%", skewX: 20 }} 
                 transition={{ type: "spring", bounce: 0, duration: 0.4 }} 
-                className="w-[800px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex border-l-[12px] border-phantom-black"
+                className="w-[600px] bg-white h-full shadow-[-20px_0_40px_rgba(0,0,0,0.5)] relative z-50 flex border-l-[12px] border-phantom-black"
             >
-                {/* Main Content (Left) */}
+                {/* Main Content (Full Width) */}
                 <div className="flex-1 flex flex-col h-full border-r-2 border-black">
                     <div className="h-64 bg-phantom-red relative overflow-hidden flex items-end p-8 shrink-0 clip-path-jagged">
-                        <button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform">
+                        <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
+                        <button onClick={() => { onClose(); playSfx('cancel'); }} className="absolute top-4 right-4 text-black hover:text-white hover:rotate-90 transition-transform z-20">
                             <X size={40} strokeWidth={4} />
                         </button>
-                        <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
                         <motion.h1 
                             key={paper.id} 
                             initial={{ y: 20, opacity: 0 }} 
@@ -121,15 +121,6 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote }: R
                             </div>
                         </div>
                     </div>
-                </div>
-
-                {/* Note Editor (Right Side) */}
-                <div className="w-[300px] h-full shrink-0">
-                    <NoteEditor 
-                        initialContent={paper.user_notes} 
-                        paperId={paper.id} 
-                        onSave={onSaveNote} 
-                    />
                 </div>
             </motion.div>
         )}

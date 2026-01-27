@@ -52,8 +52,7 @@ export default function SystemMonitor() {
     return (
         <motion.div 
             drag
-            dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-            dragElastic={0.2} // 稍微有点弹性，不用完全限制死
+            dragMomentum={false}
             whileDrag={{ scale: 1.1, cursor: "grabbing" }}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}

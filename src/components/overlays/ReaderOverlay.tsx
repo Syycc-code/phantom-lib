@@ -9,22 +9,28 @@ import {
     Languages, 
     BrainCircuit, 
     MessageSquare, 
-    Move 
+    Move,
+    FileText,
+    Eye
 } from 'lucide-react';
 import type { Paper, PlaySoundFunction } from '../../types';
+import { NoteEditor } from '../shared/NoteEditor';
 
 interface ReaderOverlayProps {
     paper: Paper;
     onClose: () => void;
     onLevelUp: (s: keyof import('../../types').PhantomStats) => void;
     playSfx: PlaySoundFunction;
+    onSaveNote: (content: string) => Promise<void>;
 }
 
-export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx }: ReaderOverlayProps) => {
+export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }: ReaderOverlayProps) => {
     const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; x: number; y: number; text: string } | null>(null);
     const [analysisResult, setAnalysisResult] = useState<{ visible: boolean; type: string; content: string } | null>(null);
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
     const [numPages, setNumPages] = useState<number>(0);
+    const [showNotes, setShowNotes] = useState(false);
+    const [safeMode, setSafeMode] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => { onLevelUp('guts'); }, []);
@@ -88,7 +94,9 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx }: ReaderOver
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[100] bg-[#050505] text-white flex flex-col"
+            className={`fixed inset-0 z-[100] flex flex-col transition-colors duration-500 ${
+                safeMode ? 'mode-safe bg-[#EAE8DC] text-[#222]' : 'bg-[#050505] text-white'
+            }`}
         >
             <div className="h-20 bg-phantom-red flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-lg z-20">
                 <div className="absolute inset-0 bg-halftone opacity-20 mix-blend-overlay" />
@@ -105,6 +113,15 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx }: ReaderOver
                     )}
                 </div>
                 <div className="flex items-center space-x-4 z-10">
+                    <button 
+                        onClick={() => { setShowNotes(!showNotes); playSfx('click'); }}
+                        className={`px-4 py-2 font-p5 text-sm border-2 border-white rounded-full transition-colors flex items-center space-x-2 ${
+                            showNotes ? 'bg-phantom-yellow text-black' : 'bg-white text-black hover:bg-phantom-yellow'
+                        }`}
+                    >
+                        <FileText size={16} />
+                        <span>NOTES</span>
+                    </button>
                     <button onClick={() => { onClose(); onLevelUp('knowledge'); playSfx('rankup'); }} className="bg-black text-white px-4 py-2 font-p5 text-sm hover:bg-phantom-yellow hover:text-black transition-colors border-2 border-white rounded-full">
                         FINISH READING
                     </button>
@@ -208,6 +225,38 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx }: ReaderOver
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* Note Editor Overlay */}
+            <AnimatePresence>
+                {showNotes && (
+                    <motion.div 
+                        initial={{ x: "100%" }} 
+                        animate={{ x: 0 }} 
+                        exit={{ x: "100%" }} 
+                        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+                        className="fixed right-0 top-0 w-[400px] h-full bg-phantom-yellow border-l-4 border-black shadow-[-8px_0_16px_rgba(0,0,0,0.3)] z-[110]"
+                    >
+                        <div className="h-full flex flex-col">
+                            <div className="bg-black text-white p-4 flex items-center justify-between shrink-0">
+                                <h3 className="font-p5 text-xl tracking-wider">INTEL NOTES</h3>
+                                <button 
+                                    onClick={() => { setShowNotes(false); playSfx('cancel'); }}
+                                    className="hover:text-phantom-red hover:rotate-90 transition-transform"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                                <NoteEditor 
+                                    initialContent={paper.user_notes} 
+                                    paperId={paper.id} 
+                                    onSave={onSaveNote} 
+                                />
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };
