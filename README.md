@@ -1,80 +1,91 @@
-# 🎩 Phantom Library (Phantom-Lib)
+# 🎩 Phantom Library V2.0 (Phantom-Lib)
 
 > *"The world is not as it should be. It's time to reform the academic distortions."*
 
-**Phantom Library** is a hyper-stylized, immersive Reference Management System inspired by the UI aesthetics of **Persona 5**. It transforms the mundane task of managing academic papers into a tactical heist of knowledge.
+**Phantom Library** is a hyper-stylized, immersive Reference Management System inspired by the UI aesthetics of **Persona 5**. It transforms the mundane task of managing academic papers into a **tactical heist of knowledge**.
 
-![License](https://img.shields.io/badge/license-MIT-red) ![Status](https://img.shields.io/badge/status-Infiltration_Active-black)
+Unlike traditional tools, Phantom Library possesses **"Cognitive Awareness"** — it reads your papers, remembers them, and can search the global internet to answer your questions.
+
+![License](https://img.shields.io/badge/license-MIT-red) ![Status](https://img.shields.io/badge/status-Infiltration_Active-black) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
 
 ---
 
-## 🚀 Features (Cognitive Abilities)
+## 🚀 Key Features (Cognitive Abilities)
 
-### 🧠 Mind Hack (Contextual AI)
-- **Select-to-Analyze**: Highlight ANY text inside a PDF or document.
-- **Phantom Menu**: A jagged menu appears instantly above your selection.
-- **Decipher**: DeepSeek AI analyzes the "subtext", "metaphors", and "hidden intent" of the selected text (Chinese output).
-- **Translate**: Instantly translates complex academic jargon into human-readable Chinese.
-- **Draggable Window**: Analysis results appear in a floating, scrollable window that you can move aside to keep reading.
+### 🧠 Mind Hack (RAG + Web Search)
+*   **Cognitive Chat**: Talk to "Navi" (The System AI). Ask questions about your papers.
+*   **Local Memory (RAG)**: The system indexes every PDF you upload. It can cite specific pages and paragraphs from your local library.
+*   **Global Network Search**: If the local database lacks answers, the system automatically hacks into the public internet (DuckDuckGo) to retrieve the latest intel.
+*   **DeepSeek-V3 Integration**: Powered by the cutting-edge DeepSeek V3 model for nuanced, context-aware reasoning.
 
-### 👁️ Activate Third Eye (Auto-Tagging)
-- **Intelligent Tagging**: Automatically scans paper titles and abstracts to detect domains (CV, NLP, RL, NetSec).
-- **Truth Reveal**: Analyzes the "Shadow" (Problem), "Persona" (Solution), and "Weakness" (Flaw) of any paper.
+### 📊 Tactical Support (System Monitor)
+*   **Real-time HUD**: A draggable, transparent "hacker" panel displays system vitals.
+*   **Latency Tracking**: Monitors AI response time (Latency) and OCR processing speed.
+*   **Visual Feedback**: Watch the system state shift from `IDLE` to `THINKING` or `SEARCHING` with dynamic animations.
 
-### 📜 Immersive Reader (Infinite Scroll)
-- **Native PDF Engine**: Renders uploaded PDFs directly in the app using `react-pdf`.
-- **Infinite Scroll**: Read long papers seamlessly without clicking "Next Page".
-- **Text Layer**: Full text selection support, enabling the "Mind Hack" on standard PDFs.
+### 👁️ Activate Third Eye (Turbo OCR)
+*   **Rapid Scanning**: Uses `RapidOCR` + `PyMuPDF` to instantly digitize scanned PDFs.
+*   **Intelligent Tagging**: Automatically detects paper domains (CV, NLP, RL, NetSec).
+*   **Truth Reveal**: Analyzes the "Shadow" (Problem), "Persona" (Solution), and "Weakness" (Flaw) of any paper.
 
-### 🎭 Infiltration Protocol
-- **Bulk Upload**: Infiltrate local PDFs (`.pdf`) or cognitive data (`.txt`, `.md`, `.json`) directly.
-- **Safe Rooms**: Organize your intel into custom Folders (Missions).
-- **Burn Evidence**: Delete unwanted papers or folders with a click.
+### 🎨 Phantom Aesthetic (Juicy UI)
+*   **Kinetic UI**: Menus slam open, cards tilt and distort on hover (`skewX`), and interactions have "weight".
+*   **Immersive Reader**: Integrated PDF reader with infinite scroll and dark mode compatibility.
+*   **Sound Effects**: Satisfying SFX for every click, select, and level up.
 
 ---
 
 ## 🛠️ Tech Stack (The Toolset)
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind v4
-- **Visuals**: Framer Motion (Spring Physics) + Custom P5 Fonts
-- **PDF Engine**: React-PDF (Mozilla PDF.js)
-- **Backend**: Python FastAPI (Handles DeepSeek API calls)
-- **Persistence**: `localStorage` (Metadata) + Blob URLs (Session Files)
+*   **Frontend**: React 19 + TypeScript + Vite + Tailwind v4 + Framer Motion
+*   **Backend**: Python FastAPI (Async)
+*   **AI Core**: DeepSeek API (`deepseek-chat`) + `duckduckgo-search`
+*   **Memory**: ChromaDB (Vector Database) + `sentence-transformers`
+*   **Vision**: RapidOCR (OnnxRuntime)
 
 ---
 
 ## 🕹️ Quick Start (Begin Heist)
 
-### Option A: The Ignition Key (Windows One-Click)
-1.  Locate `start_phantom.bat` in the root folder.
-2.  **Double-click it**.
-3.  The system will launch both the Brain (Backend) and the Face (Frontend) automatically.
+### Prerequisites
+*   **Python 3.10+**
+*   **Node.js 18+**
+*   **DeepSeek API Key** (Get one at [platform.deepseek.com](https://platform.deepseek.com))
 
-### Option B: Manual Infiltration
+### 1. Configure Secrets
+Create a `.env` file in the root `phantom-lib/` directory:
+```ini
+DEEPSEEK_API_KEY=sk-your-key-here
+# Optional: Set to 'mock-key' to run in simulation mode (offline)
+```
 
-1.  **Start the Brain (Backend):**
-    ```bash
-    cd backend
-    pip install -r requirements.txt
-    uvicorn main:app --reload
-    ```
+### 2. Launch the Palace (Windows)
+Simply double-click **`start_phantom.bat`**.
+*   It automatically installs Python dependencies.
+*   It launches the Backend (Brain) on port 8000.
+*   It launches the Frontend (Face) on port 5173.
 
-2.  **Start the Face (Frontend):**
-    ```bash
-    # Open a new terminal
-    npm install
-    npm run dev
-    ```
+### 3. Manual Launch (Linux/Mac)
+**Backend:**
+```bash
+cd backend
+pip install -r requirements.txt
+python -m uvicorn main:app --reload
+```
 
-3.  **Access the Palace:**
-    Navigate to `http://localhost:5173`.
+**Frontend:**
+```bash
+npm install
+npm run dev
+```
 
 ---
 
 ## ⚠️ Cognitive Notes
 
--   **DeepSeek Key**: To enable real AI analysis, create a `.env` file in `phantom-lib/` with `DEEPSEEK_API_KEY=your_key_here`. If missing, the system uses a built-in simulation mode.
--   **File Persistence**: Due to browser security, **PDF files uploaded via Bulk Import will disappear if you refresh the page**. Only the metadata (titles, tags, notes) persists.
+*   **Initial Boot**: The first time you run the backend, it will download the Embedding Model (~200MB) from HuggingFace (via mirror). This may take a minute.
+*   **Performance**: To speed up OCR, ensure you have `onnxruntime-gpu` installed if you have an NVIDIA GPU.
+*   **Privacy**: Your PDFs are processed locally. Only text snippets (for RAG) and queries are sent to DeepSeek/OpenAI compatible APIs.
 
 ---
 

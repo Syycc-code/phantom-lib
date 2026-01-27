@@ -72,11 +72,11 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
 # --- AI Setup ---
-# 增加 timeout 设置 (30秒 -> 15秒)，避免长时间等待
+# 增加 timeout 设置 (15秒 -> 60秒)，给予复杂推理更多时间
 deepseek_client = AsyncOpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY", "mock-key"), 
     base_url="https://api.deepseek.com",
-    timeout=15.0
+    timeout=60.0
 )
 
 # --- OCR Setup ---
