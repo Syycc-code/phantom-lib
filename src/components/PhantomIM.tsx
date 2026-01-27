@@ -25,34 +25,73 @@ export default function PhantomIM() {
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!input.trim()) return;
+        if (!input.trim() || isTyping) return;
 
-        const userMsg: ChatMessage = { id: Date.now(), role: 'user', content: input };
+        const userText = input;
+        const userMsg: ChatMessage = { id: Date.now(), role: 'user', content: userText };
         setMessages(prev => [...prev, userMsg]);
         setInput("");
         setIsTyping(true);
 
+        // Placeholder for streaming response
+        const botMsgId = Date.now() + 1;
+        setMessages(prev => [...prev, { id: botMsgId, role: 'oracle', content: "" }]);
+
         try {
-            const res = await fetch('/api/chat', {
+            const res = await fetch('/api/chat_stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: userMsg.content })
+                body: JSON.stringify({ query: userText })
             });
-            
+
             if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-            
-            const data = await res.json();
-            
-            const oracleMsg: ChatMessage = { 
-                id: Date.now() + 1, 
-                role: 'oracle', 
-                content: data.answer,
-                sources: data.sources 
-            };
-            setMessages(prev => [...prev, oracleMsg]);
+            if (!res.body) throw new Error("No response body");
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let done = false;
+            let currentContent = "";
+
+            while (!done) {
+                const { value, done: doneReading } = await reader.read();
+                done = doneReading;
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.content) {
+                                currentContent += data.content;
+                                setMessages(prev => prev.map(msg => 
+                                    msg.id === botMsgId ? { ...msg, content: currentContent } : msg
+                                ));
+                            }
+                            if (data.sources) {
+                                setMessages(prev => prev.map(msg => 
+                                    msg.id === botMsgId ? { ...msg, sources: data.sources } : msg
+                                ));
+                            }
+                            if (data.error) {
+                                currentContent += `\n[ERROR: ${data.error}]`;
+                                setMessages(prev => prev.map(msg => 
+                                    msg.id === botMsgId ? { ...msg, content: currentContent } : msg
+                                ));
+                            }
+                        } catch (e) {
+                            console.warn("Stream parse error:", e);
+                        }
+                    }
+                }
+            }
         } catch (e: any) {
-            console.error("PhantomIM Network Error:", e);
-            setMessages(prev => [...prev, { id: Date.now()+1, role: 'oracle', content: `Network Error: Cognitive Signal Lost.\n${e.message || "Check backend connection."}` }]);
+            console.error("Stream Error:", e);
+            setMessages(prev => prev.map(msg => 
+                msg.id === botMsgId ? { ...msg, content: msg.content + `\n\n[CONNECTION LOST: ${e.message}]` } : msg
+            ));
         } finally {
             setIsTyping(false);
         }

@@ -149,13 +149,15 @@ def extract_text_from_file_sync(file_content: bytes, filename: str) -> str:
     try:
         if filename.lower().endswith(".pdf"):
             with fitz.open(stream=file_content, filetype="pdf") as doc:
-                # Performance Optimization: Only process first 2 pages (reduced from 3+last)
-                target_pages = set(range(min(2, doc.page_count)))
+                # Performance Optimization: Only process first 1 page for instant preview (Background will handle full index later)
+                target_pages = set(range(min(1, doc.page_count)))
                 
                 for page_num in sorted(list(target_pages)):
                     page = doc.load_page(page_num)
                     text = page.get_text()
-                    if len(text.strip()) > 100:
+                    # AGGRESSIVE OPTIMIZATION: If we find > 15 chars (e.g. a title), SKIP OCR.
+                    # This makes non-scanned PDFs instant.
+                    if len(text.strip()) > 15:
                         extracted_text += f"\n--- Page {page_num+1} ---\n{text}\n"
                         continue
                     
@@ -413,77 +415,100 @@ async def chat_with_phantom(request: ChatRequest):
 @app.post("/api/chat_stream")
 async def chat_with_phantom_stream(request: ChatRequest):
     """
-    流式RAG聊天 - 即时返回，边生成边显示
+    流式RAG聊天 (V2.0) - 集成 Web Search, Monitoring, 和 Streaming
     """
-    if not RAG_AVAILABLE or not knowledge_collection or not embedder:
-        async def error_stream():
-            yield f"data: {json.dumps({'error': 'RAG未启用'}, ensure_ascii=False)}\n\n"
-        return StreamingResponse(error_stream(), media_type="text/event-stream")
+    print(f"[PHANTOM] Stream Chat Requested: {request.query}")
     
-    query = request.query
-    api_key = os.getenv("DEEPSEEK_API_KEY")
+    # 1. Update Monitor
+    system_metrics["ai_state"] = "THINKING"
+    start_time = time.time()
 
     async def generate():
         try:
-            # 1. 快速检索
-            query_embedding = embedder.encode([query]).tolist()
-            results = knowledge_collection.query(
-                query_embeddings=query_embedding,
-                n_results=2  # 从3减少到2，加速检索
-            )
-            
+            # --- A. RAG Retrieval ---
             context_text = ""
             sources = set()
             
-            if results['documents']:
-                for i, doc in enumerate(results['documents'][0]):
-                    meta = results['metadatas'][0][i]
-                    source = meta.get('source', 'Unknown')
-                    context_text += f"[Source: {source}]\n{doc}\n\n"
-                    sources.add(source)
+            if RAG_AVAILABLE and knowledge_collection and embedder:
+                try:
+                    query_embedding = embedder.encode([request.query]).tolist()
+                    results = knowledge_collection.query(
+                        query_embeddings=query_embedding,
+                        n_results=2
+                    )
+                    if results.get('documents'):
+                        for i, doc in enumerate(results['documents'][0]):
+                            meta = results['metadatas'][0][i]
+                            src = meta.get('source', 'Unknown')
+                            context_text += f"[Source: {src}]\n{doc}\n\n"
+                            sources.add(src)
+                except Exception as e:
+                    print(f"[RAG Error] {e}")
 
             if not context_text:
                 context_text = "No relevant internal documents found."
 
-            # 2. 流式生成
-            system_prompt = (
-                "你是怪盗团的导航员 (Oracle/Navi)。你掌管着'印象空间'的知识库。"
-                "请根据提供的[上下文]回答用户的提问。如果上下文里有答案，请引用来源。"
-                "如果上下文没有，请用你的通用知识回答，但要说明'数据库中未找到相关情报'。"
-                "风格：活泼、极客、充满黑客术语 (Hack, Exploit, Shadow)。"
-                "回答要简洁，直接给出关键信息。"
-            )
+            # --- B. Web Search Fallback ---
+            if "No relevant internal documents found" in context_text and SEARCH_AVAILABLE:
+                system_metrics["ai_state"] = "SEARCHING"
+                yield f"data: {json.dumps({'content': '🔍 [Searching Global Network]...\n\n'}, ensure_ascii=False)}\n\n"
+                try:
+                    # Run search in thread
+                    loop = asyncio.get_event_loop()
+                    web_results = await loop.run_in_executor(None, perform_web_search, request.query)
+                    if web_results:
+                        context_text = f"【Web Intel】\n{web_results}"
+                        sources.add("Global Network")
+                except Exception as e:
+                    print(f"[Search Error] {e}")
+            
+            system_metrics["ai_state"] = "THINKING"
 
+            # --- C. System Prompt ---
+            system_prompt = (
+                "你是怪盗团的导航员 (Oracle/Navi)。"
+                "风格：活泼、极客、充满黑客术语 (Hack, Exploit, Shadow)。"
+                "如果上下文有信息，请引用。如果没有，请根据你的知识回答。"
+            )
+            
+            api_key = os.getenv("DEEPSEEK_API_KEY")
             if not api_key or api_key == "mock-key":
-                yield f"data: {json.dumps({'content': '【模拟模式】正在分析...'}, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.3)
-                yield f"data: {json.dumps({'content': f'查询: {query}'}, ensure_ascii=False)}\n\n"
-                yield f"data: {json.dumps({'done': True, 'sources': list(sources)}, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.5)
+                yield f"data: {json.dumps({'content': '【Mock Mode】API Key missing. Simulating response...'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+                system_metrics["ai_state"] = "IDLE"
                 return
 
-            # 启用流式输出
+            # --- D. Streaming Generation ---
             response = await deepseek_client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"上下文:\n{context_text}\n\n问题: {query}"},
+                    {"role": "user", "content": f"Context:\n{context_text}\n\nQuery: {request.query}"},
                 ],
                 stream=True,
-                max_tokens=500,
+                max_tokens=1000,
+                timeout=60.0
             )
-            
-            # 流式返回
+
             async for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
             
-            # 结束标记
-            yield f"data: {json.dumps({'done': True, 'sources': list(sources)}, ensure_ascii=False)}\n\n"
+            # --- E. Cleanup ---
+            end_time = time.time()
+            system_metrics["ai_latency_ms"] = int((end_time - start_time) * 1000)
+            system_metrics["ai_state"] = "IDLE"
             
+            # Send Done signal with sources
+            yield f"data: {json.dumps({'done': True, 'sources': list(sources)}, ensure_ascii=False)}\n\n"
+
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
-    
+            system_metrics["ai_state"] = "ERROR"
+            error_msg = f"⚠️ Cognitive Breakdown: {str(e)}"
+            yield f"data: {json.dumps({'error': error_msg}, ensure_ascii=False)}\n\n"
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/api/mind_hack")
