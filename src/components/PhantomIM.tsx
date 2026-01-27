@@ -156,11 +156,11 @@ export default function PhantomIM() {
                                             animate={{ scale: 1, opacity: 1 }}
                                             className={`p-3 text-sm relative shadow-lg ${
                                                 msg.role === 'user' 
-                                                ? 'bg-white text-black rounded-tl-xl rounded-bl-xl rounded-br-xl transform -skew-x-6' 
-                                                : 'bg-black text-white rounded-tr-xl rounded-br-xl rounded-bl-xl transform skew-x-6'
+                                                ? 'bg-white text-black rounded-tl-xl rounded-bl-xl rounded-br-xl' 
+                                                : 'bg-black text-white rounded-tr-xl rounded-br-xl rounded-bl-xl'
                                             }`}
                                         >
-                                            <div className={msg.role === 'user' ? 'transform skew-x-6' : 'transform -skew-x-6'}>
+                                            <div>
                                                 {msg.content}
                                                 {msg.sources && msg.sources.length > 0 && (
                                                     <div className="mt-2 pt-2 border-t border-gray-600">

@@ -353,6 +353,7 @@ function App() {
             onSelect={(p: any) => { setSelectedPaper(p); playSfx('click'); }} 
             onAddPaper={handleAddPaper} 
             onDeletePaper={handleDeletePaper} 
+            onBulkImport={handleBulkImport}
             onBulkDelete={handleBulkDelete}
             toggleFusionSelection={toggleFusionSelection}
             fusionTargetIds={fusionTargetIds}
