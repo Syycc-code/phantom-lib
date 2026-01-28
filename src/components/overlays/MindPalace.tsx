@@ -1,254 +1,393 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, Text, Line, Billboard, Float } from '@react-three/drei';
-import * as THREE from 'three';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Maximize2 } from 'lucide-react';
-import type { Paper, PlaySoundFunction } from '../../types';
+import { X, ExternalLink, Zap, Brain } from 'lucide-react';
+import type { Paper } from '../../types';
 
 interface MindPalaceProps {
     papers: Paper[];
     onClose: () => void;
     onRead: (paper: Paper) => void;
-    playSfx: PlaySoundFunction;
+    playSfx: (type: 'click' | 'hover' | 'cancel' | 'impact') => void;
 }
 
-// Helper: Calculate positions based on tags (Force Directed layout simulation)
-const calculatePositions = (papers: Paper[]) => {
-    // If no papers, generate some dummy nodes for visualization
-    if (!papers || papers.length === 0) {
-        return Array.from({ length: 5 }, (_, i) => ({
-            id: -i,
-            title: "Empty Node",
-            abstract: "The mind palace is empty.",
-            tags: ["Void"],
-            x: (Math.random() - 0.5) * 5, // Reduced range
-            y: (Math.random() - 0.5) * 5,
-            z: (Math.random() - 0.5) * 5,
-            cluster: "Void"
-        }));
-    }
+// --- CONSTANTS: MAJOR ARCANA ---
+const MAJOR_ARCANA = [
+    { number: "0", name: "The Fool", meaning: "Beginnings, Innocence" }, // Center Node
+    { number: "I", name: "The Magician", meaning: "Willpower, Creation" },
+    { number: "II", name: "High Priestess", meaning: "Intuition, Unconscious" },
+    { number: "III", name: "The Empress", meaning: "Fertility, Nature" },
+    { number: "IV", name: "The Emperor", meaning: "Authority, Structure" },
+    { number: "V", name: "The Hierophant", meaning: "Tradition, Beliefs" },
+    { number: "VI", name: "The Lovers", meaning: "Partnership, Union" },
+    { number: "VII", name: "The Chariot", meaning: "Control, Willpower" },
+    { number: "VIII", name: "Strength", meaning: "Courage, Influence" },
+    { number: "IX", name: "The Hermit", meaning: "Introspection, Guidance" },
+    { number: "X", name: "Wheel of Fortune", meaning: "Destiny, Change" },
+    { number: "XI", name: "Justice", meaning: "Fairness, Truth" },
+    { number: "XII", name: "The Hanged Man", meaning: "Surrender, Perspective" },
+    { number: "XIII", name: "Death", meaning: "Endings, Transition" },
+    { number: "XIV", name: "Temperance", meaning: "Balance, Moderation" },
+    { number: "XV", name: "The Devil", meaning: "Addiction, Materialism" },
+    { number: "XVI", name: "The Tower", meaning: "Upheaval, Awakening" },
+    { number: "XVII", name: "The Star", meaning: "Hope, Inspiration" },
+    { number: "XVIII", name: "The Moon", meaning: "Illusion, Fear" },
+    { number: "XIX", name: "The Sun", meaning: "Positivity, Success" },
+    { number: "XX", name: "Judgement", meaning: "Rebirth, Inner Calling" },
+    { number: "XXI", name: "The World", meaning: "Completion, Travel" }
+];
 
-    const nodes = papers.map(p => ({
-        ...p,
-        x: (Math.random() - 0.5) * 10, // Compact range
-        y: (Math.random() - 0.5) * 10,
-        z: (Math.random() - 0.5) * 10,
-        cluster: p.tags?.[0] || 'Unknown'
-    }));
+// --- TYPES ---
+interface Node {
+    id: string;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    type: 'fool' | 'paper';
+    data?: Paper;
+    arcana?: typeof MAJOR_ARCANA[0];
+}
 
-    return nodes;
-};
+interface Link {
+    source: string;
+    target: string;
+    strength: number; // 0-1
+}
 
-// Component: Single Document Node (Optimized)
-const Node = ({ data, onSelect, selectedId }: { data: any, onSelect: (p: any) => void, selectedId: number | null }) => {
-    const mesh = useRef<THREE.Mesh>(null);
-    const isSelected = selectedId === data.id;
-    
-    // Simple rotation without heavy Float calculations if lagging
-    useFrame((state) => {
-        if (!mesh.current) return;
-        mesh.current.rotation.y += 0.01;
-    });
+function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
-    return (
-        <group position={[data.x, data.y, data.z]}>
-            {/* Document Mesh */}
-            <mesh 
-                ref={mesh} 
-                onClick={(e) => { e.stopPropagation(); onSelect(data); }}
-                onPointerOver={() => document.body.style.cursor = 'pointer'}
-                onPointerOut={() => document.body.style.cursor = 'auto'}
-            >
-                <boxGeometry args={[1.5, 2, 0.2]} />
-                <meshStandardMaterial 
-                    color={isSelected ? "#E60012" : "#222"} 
-                    emissive={isSelected ? "#E60012" : "#444"}
-                    emissiveIntensity={isSelected ? 0.8 : 0.5} // Higher visibility
-                    roughness={0.4}
-                    metalness={0.6}
-                />
-            </mesh>
-            
-            {/* Wireframe for visibility - Always visible */}
-            <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[1.6, 2.1, 0.25]} />
-                <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.3} />
-            </mesh>
+    // 1. Initialize Nodes & Links
+    const { nodes, links } = useMemo(() => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // A. Create Nodes
+        const initialNodes: Node[] = [];
+        
+        // Center Node: The Fool (You)
+        initialNodes.push({
+            id: 'root-fool',
+            x: width / 2,
+            y: height / 2,
+            vx: 0,
+            vy: 0,
+            type: 'fool',
+            arcana: MAJOR_ARCANA[0]
+        });
 
-            {/* Floating Title - Simplified Billboard */}
-            <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
-                <Text 
-                    position={[0, 1.5, 0]} 
-                    fontSize={0.5} // Larger text
-                    color="white"
-                    anchorX="center" 
-                    anchorY="middle"
-                    outlineWidth={0.02}
-                    outlineColor="#000"
-                >
-                    {data.title ? (data.title.length > 10 ? data.title.substring(0, 10) + '...' : data.title) : "Untitled"}
-                </Text>
-            </Billboard>
-        </group>
-    );
-};
+        // Paper Nodes
+        papers.forEach((p, idx) => {
+            // Assign Arcana based on index (skipping 0-Fool)
+            const arcanaIdx = (idx % (MAJOR_ARCANA.length - 1)) + 1;
+            initialNodes.push({
+                id: `paper-${p.id}`,
+                x: width / 2 + (Math.random() - 0.5) * 400,
+                y: height / 2 + (Math.random() - 0.5) * 400,
+                vx: 0,
+                vy: 0,
+                type: 'paper',
+                data: p,
+                arcana: MAJOR_ARCANA[arcanaIdx]
+            });
+        });
 
-// Component: Connections (Synapses)
-const Connections = ({ nodes }: { nodes: any[] }) => {
-    // Generate lines between nodes sharing tags
-    const lines = useMemo(() => {
-        const connections: any[] = [];
-        for (let i = 0; i < nodes.length; i++) {
-            for (let j = i + 1; j < nodes.length; j++) {
-                // If share at least one tag
-                const n1 = nodes[i];
-                const n2 = nodes[j];
-                const sharedTags = n1.tags?.filter((t: string) => n2.tags?.includes(t));
+        // B. Create Links
+        const initialLinks: Link[] = [];
+        
+        // Link all to Fool (Weak connection)
+        papers.forEach(p => {
+            initialLinks.push({ source: 'root-fool', target: `paper-${p.id}`, strength: 0.05 });
+        });
+
+        // Link Papers based on Shared Tags (Strong connection)
+        for (let i = 0; i < papers.length; i++) {
+            for (let j = i + 1; j < papers.length; j++) {
+                const p1 = papers[i];
+                const p2 = papers[j];
+                const sharedTags = p1.tags.filter(t => p2.tags.includes(t));
                 
-                if (sharedTags && sharedTags.length > 0) {
-                    connections.push({
-                        start: [n1.x, n1.y, n1.z],
-                        end: [n2.x, n2.y, n2.z],
-                        strength: sharedTags.length
+                if (sharedTags.length > 0) {
+                    initialLinks.push({ 
+                        source: `paper-${p1.id}`, 
+                        target: `paper-${p2.id}`, 
+                        strength: 0.1 + (sharedTags.length * 0.05) // More tags = closer
                     });
                 }
             }
         }
-        return connections;
-    }, [nodes]);
 
-    return (
-        <group>
-            {lines.map((line, i) => (
-                <Line 
-                    key={i} 
-                    points={[line.start, line.end]} 
-                    color="#444" 
-                    lineWidth={1} 
-                    transparent 
-                    opacity={0.2} 
-                />
-            ))}
-        </group>
-    );
-};
+        return { nodes: initialNodes, links: initialLinks };
+    }, [papers]);
 
-export const MindPalace = ({ papers, onClose, onRead, playSfx }: MindPalaceProps) => {
-    const nodes = useMemo(() => calculatePositions(papers), [papers]);
-    const [selectedPaper, setSelectedPaper] = useState<any | null>(null);
+    // Mutable state for physics simulation
+    const simulationNodes = useRef(nodes);
+    const [renderTrigger, setRenderTrigger] = useState(0);
 
-    const handleSelect = (paper: any) => {
-        playSfx('click');
-        setSelectedPaper(paper);
-    };
+    // 2. Physics Engine (Custom RAF Loop)
+    useEffect(() => {
+        simulationNodes.current = nodes; // Update ref if props change
+        let animationFrameId: number;
+
+        const tick = () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const k = 0.05; // Spring constant
+            const repulsion = 5000;
+            const centerRepulsion = 100;
+
+            const currentNodes = simulationNodes.current;
+
+            // Apply Forces
+            for (let i = 0; i < currentNodes.length; i++) {
+                const node = currentNodes[i];
+                if (node.type === 'fool') {
+                    // Lock Fool to center
+                    node.x = width / 2;
+                    node.y = height / 2;
+                    continue;
+                }
+
+                let fx = 0, fy = 0;
+
+                // 1. Repulsion (Nodes push away from each other)
+                for (let j = 0; j < currentNodes.length; j++) {
+                    if (i === j) continue;
+                    const other = currentNodes[j];
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const distSq = dx * dx + dy * dy || 1;
+                    const force = repulsion / distSq;
+                    fx += (dx / Math.sqrt(distSq)) * force;
+                    fy += (dy / Math.sqrt(distSq)) * force;
+                }
+
+                // 2. Attraction (Links pull together)
+                links.forEach(link => {
+                    const isSource = link.source === node.id;
+                    const isTarget = link.target === node.id;
+                    if (isSource || isTarget) {
+                        const targetId = isSource ? link.target : link.source;
+                        const targetNode = currentNodes.find(n => n.id === targetId);
+                        if (targetNode) {
+                            const dx = targetNode.x - node.x;
+                            const dy = targetNode.y - node.y;
+                            fx += dx * k * link.strength;
+                            fy += dy * k * link.strength;
+                        }
+                    }
+                });
+
+                // 3. Center Gravity (Keep them on screen)
+                const dx = (width / 2) - node.x;
+                const dy = (height / 2) - node.y;
+                fx += dx * 0.002;
+                fy += dy * 0.002;
+
+                // Apply Velocity
+                node.vx = (node.vx + fx) * 0.9; // Damping
+                node.vy = (node.vy + fy) * 0.9;
+                node.x += node.vx;
+                node.y += node.vy;
+            }
+
+            setRenderTrigger(prev => prev + 1); // Force re-render
+            animationFrameId = requestAnimationFrame(tick);
+        };
+
+        tick();
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [nodes, links]);
 
     return (
         <motion.div 
-            initial={{ opacity: 0, scale: 1.1 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="fixed inset-0 z-[500] bg-black"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md overflow-hidden"
+            ref={containerRef}
+            onClick={() => setSelectedNode(null)}
         >
-            {/* UI Overlay */}
-            <div className="absolute top-0 left-0 w-full p-6 z-10 flex justify-between pointer-events-none">
-                <div className="pointer-events-auto">
-                    <h1 className="text-4xl font-p5 text-white tracking-widest text-shadow-red">
-                        MIND PALACE
-                    </h1>
-                    <p className="text-gray-400 font-mono text-sm">
-                        COGNITIVE METAVERSE // {papers.length} NODES DETECTED
-                    </p>
-                </div>
-                <button 
-                    onClick={() => { onClose(); playSfx('cancel'); }}
-                    className="pointer-events-auto bg-black border-2 border-white rounded-full p-2 text-white hover:bg-white hover:text-black transition-colors"
-                >
-                    <X size={32} />
-                </button>
+            {/* --- BACKGROUND PATTERN --- */}
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 pointer-events-none"></div>
+            
+            {/* --- HEADER --- */}
+            <div className="absolute top-6 left-12 z-50 pointer-events-none">
+                <h1 className="text-6xl font-p5 text-white transform -skew-x-12 tracking-wider">
+                    <span className="text-phantom-red">MIND</span> PALACE
+                </h1>
+                <p className="text-white/60 font-mono mt-2 ml-4">
+                    // COGNITIVE NETWORK VISUALIZATION
+                </p>
             </div>
 
-            {/* Selected Paper Detail Overlay */}
-            <AnimatePresence>
-                {selectedPaper && (
-                    <motion.div 
-                        initial={{ x: 400, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: 400, opacity: 0 }}
-                        className="absolute top-0 right-0 w-96 h-full bg-black/80 backdrop-blur-md border-l-4 border-phantom-red z-20 p-8 flex flex-col pointer-events-auto"
+            <button 
+                onClick={onClose}
+                className="absolute top-8 right-8 z-50 p-2 bg-phantom-red text-white hover:bg-white hover:text-black transition-colors transform hover:rotate-90 duration-300"
+            >
+                <X size={32} />
+            </button>
+
+            {/* --- VISUALIZATION LAYER --- */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                {links.map((link, i) => {
+                    const source = simulationNodes.current.find(n => n.id === link.source);
+                    const target = simulationNodes.current.find(n => n.id === link.target);
+                    if (!source || !target) return null;
+
+                    const isStrong = link.strength > 0.09;
+
+                    return (
+                        <motion.line
+                            key={i}
+                            x1={source.x}
+                            y1={source.y}
+                            x2={target.x}
+                            y2={target.y}
+                            stroke={isStrong ? "#FF0000" : "#444"}
+                            strokeWidth={isStrong ? 2 : 1}
+                            strokeOpacity={isStrong ? 0.6 : 0.2}
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 1, delay: i * 0.05 }}
+                        />
+                    );
+                })}
+            </svg>
+
+            {/* --- NODES LAYER --- */}
+            <div className="absolute inset-0 pointer-events-none">
+                {simulationNodes.current.map((node) => (
+                    <motion.div
+                        key={node.id}
+                        className={`absolute flex flex-col items-center justify-center cursor-pointer pointer-events-auto group ${
+                            selectedNode?.id === node.id ? 'z-40' : 'z-10'
+                        }`}
+                        style={{
+                            left: node.x,
+                            top: node.y,
+                            x: '-50%',
+                            y: '-50%'
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedNode(node);
+                            playSfx('click');
+                        }}
+                        whileHover={{ scale: 1.1, zIndex: 50 }}
                     >
-                        <h2 className="text-2xl font-p5 text-white mb-4">{selectedPaper.title}</h2>
-                        
-                        <div className="flex flex-wrap gap-2 mb-6">
-                            {selectedPaper.tags?.map((tag: string) => (
-                                <span key={tag} className="px-2 py-1 bg-zinc-800 text-xs font-mono text-gray-300 border border-gray-600">
-                                    #{tag}
-                                </span>
-                            ))}
+                        {/* TAROT CARD VISUAL */}
+                        <div className={`relative w-24 h-36 bg-black border-2 transition-all duration-300 ${
+                            node.type === 'fool' 
+                                ? 'border-phantom-blue shadow-[0_0_20px_#00f]' 
+                                : selectedNode?.id === node.id 
+                                    ? 'border-phantom-red shadow-[0_0_30px_#f00] scale-125' 
+                                    : 'border-white/50 hover:border-phantom-red'
+                        }`}>
+                            {/* Card Pattern/Image Placeholder */}
+                            <div className="absolute inset-1 border border-white/20 flex flex-col items-center p-1 bg-zinc-900">
+                                {/* Arcana Number Top */}
+                                <div className="text-[10px] font-serif text-white/50 w-full text-center border-b border-white/10 pb-1">
+                                    {node.arcana?.number}
+                                </div>
+                                
+                                {/* Icon / Content */}
+                                <div className="flex-1 flex items-center justify-center">
+                                    {node.type === 'fool' ? (
+                                        <Brain size={32} className="text-phantom-blue animate-pulse" />
+                                    ) : (
+                                        <div className="text-center">
+                                            <ExternalLink size={20} className="text-white/30 mx-auto mb-1" />
+                                            {/* Mini Tag Indicators */}
+                                            <div className="flex gap-1 justify-center flex-wrap">
+                                                {node.data?.tags.slice(0, 2).map((t, i) => (
+                                                    <span key={i} className="w-1 h-1 rounded-full bg-phantom-red" />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Arcana Name Bottom */}
+                                <div className="text-[9px] font-serif text-white/80 uppercase tracking-tighter text-center pt-1 border-t border-white/10 w-full truncate">
+                                    {node.arcana?.name}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+
+            {/* --- DETAILS OVERLAY (Right Side) --- */}
+            <AnimatePresence>
+                {selectedNode && (
+                    <motion.div 
+                        initial={{ x: 300, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: 300, opacity: 0 }}
+                        className="absolute right-0 top-0 bottom-0 w-80 bg-phantom-black border-l-4 border-phantom-red p-6 flex flex-col z-50 shadow-2xl"
+                    >
+                        <div className="flex-1">
+                            <div className="text-phantom-red font-serif italic text-sm mb-2">
+                                {selectedNode.arcana?.number}. {selectedNode.arcana?.name}
+                            </div>
+                            
+                            {selectedNode.type === 'fool' ? (
+                                <>
+                                    <h2 className="text-3xl text-white font-p5 mb-4">THE FOOL</h2>
+                                    <p className="text-white/70 text-sm leading-relaxed">
+                                        The beginning of the journey. Infinite possibilities. This node represents your cognitive core, connecting all knowledge fragments.
+                                    </p>
+                                    <div className="mt-8 border-t border-dashed border-white/30 pt-4">
+                                        <div className="text-xs text-phantom-blue uppercase tracking-widest mb-2">System Stats</div>
+                                        <div className="text-2xl text-white font-bold">{papers.length} <span className="text-sm font-normal text-gray-400">Fragments</span></div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <h2 className="text-2xl text-white font-bold leading-tight mb-4 font-sans">
+                                        {selectedNode.data?.title}
+                                    </h2>
+                                    
+                                    <div className="flex flex-wrap gap-2 mb-6">
+                                        {selectedNode.data?.tags.map((tag, i) => (
+                                            <span key={i} className="px-2 py-1 bg-white text-black text-xs font-bold transform -skew-x-12">
+                                                #{tag}
+                                            </span>
+                                        ))}
+                                    </div>
+
+                                    {selectedNode.data?.shadow_problem && (
+                                        <div className="mb-4 bg-red-900/20 p-3 border-l-2 border-red-500">
+                                            <div className="text-xs text-red-400 font-bold mb-1">SHADOW</div>
+                                            <p className="text-white/80 text-xs">{selectedNode.data.shadow_problem}</p>
+                                        </div>
+                                    )}
+
+                                    <p className="text-white/60 text-sm italic line-clamp-6">
+                                        "{selectedNode.data?.abstract}"
+                                    </p>
+                                </>
+                            )}
                         </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar mb-6">
-                            <p className="text-gray-300 font-serif text-sm leading-relaxed">
-                                {selectedPaper.abstract || "No cognitive data available for this node."}
-                            </p>
-                        </div>
-
-                        <button 
-                            onClick={() => { onRead(selectedPaper); playSfx('confirm'); }}
-                            className="w-full py-4 bg-phantom-red text-white font-p5 text-xl tracking-widest hover:bg-white hover:text-phantom-red transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Maximize2 size={20} /> ENTER NODE
-                        </button>
+                        {selectedNode.type === 'paper' && (
+                            <button
+                                onClick={() => {
+                                    if(selectedNode.data) onRead(selectedNode.data);
+                                }}
+                                className="w-full py-4 bg-phantom-red text-white font-p5 text-xl hover:bg-white hover:text-black transition-colors flex items-center justify-center gap-2 group"
+                            >
+                                <Zap className="group-hover:rotate-12 transition-transform" />
+                                <span>TAKE YOUR HEART</span>
+                            </button>
+                        )}
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* 3D Scene */}
-            <div className="w-full h-full cursor-move bg-black">
-                <Canvas 
-                    camera={{ position: [0, 0, 30], fov: 50 }}
-                    dpr={[1, 2]} // Limit DPR for performance
-                    gl={{ antialias: false, powerPreference: "high-performance" }} // Optimize WebGL context
-                >
-                    <color attach="background" args={['#050505']} />
-                    <fog attach="fog" args={['#050505', 20, 60]} />
-                    
-                    <ambientLight intensity={1.5} /> {/* Stronger ambient */}
-                    <pointLight position={[10, 10, 10]} intensity={2} color="#E60012" distance={50} />
-                    <pointLight position={[-10, -10, -10]} intensity={1} color="#444" distance={50} />
-                    
-                    <Stars radius={50} depth={20} count={2000} factor={3} saturation={0} fade speed={0.5} />
-                    
-                    <group>
-                        {/* Central Core Marker */}
-                        <mesh position={[0,0,0]}>
-                            <sphereGeometry args={[0.5, 16, 16]} />
-                            <meshStandardMaterial color="#E60012" emissive="#E60012" emissiveIntensity={2} />
-                        </mesh>
-                        <gridHelper args={[100, 20, "#333", "#111"]} position={[0, -10, 0]} /> {/* Floor Grid */}
-
-                        {nodes.map(node => (
-                            <Node 
-                                key={node.id} 
-                                data={node} 
-                                onSelect={handleSelect} 
-                                selectedId={selectedPaper?.id} 
-                            />
-                        ))}
-                        <Connections nodes={nodes} />
-                    </group>
-
-                    <OrbitControls 
-                        enablePan={true} 
-                        enableZoom={true} 
-                        enableRotate={true}
-                        autoRotate={!selectedPaper}
-                        autoRotateSpeed={0.3}
-                        maxDistance={60}
-                        minDistance={5}
-                    />
-                </Canvas>
-            </div>
         </motion.div>
     );
-};
+}
+
+export { MindPalace };
