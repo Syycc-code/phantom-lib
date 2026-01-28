@@ -38,7 +38,7 @@ import {
   CallingCard
 } from './components';
 import { HackProgress } from './components/shared/HackProgress';
-import { ShopOverlay, ShopItem } from './components/overlays/ShopOverlay';
+import { ShopOverlay, type ShopItem } from './components/overlays/ShopOverlay';
 import SystemMonitor from './components/SystemMonitor';
 import { UploadProgress } from './components/shared/UploadProgress';
 import LeftPane from './components/panes/LeftPane';
@@ -51,7 +51,11 @@ import { INITIAL_FOLDERS, INITIAL_PAPERS } from './constants';
 type FolderType = Folder;
 
 // --- PDF WORKER SETUP ---
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// try {
+//     pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// } catch (e) {
+//     console.error("PDF Worker Init Failed", e);
+// }
 
 // --- AUDIO ENGINE (SYNTHESIZER) ---
 const useAudioSystem = () => {
@@ -171,7 +175,16 @@ function App() {
   
   // Shop State
   const [inventory, setInventory] = useState<string[]>(() => { const saved = localStorage.getItem('phantom_inventory'); return saved ? JSON.parse(saved) : ['theme_default']; });
-  const [equipped, setEquipped] = useState<{theme: string}>(() => { const saved = localStorage.getItem('phantom_equipped'); return saved ? JSON.parse(saved) : { theme: 'theme_default' }; });
+  const [equipped, setEquipped] = useState<{theme: string, effect_monitor: string, effect_im: string, effect_marker: string}>(() => { 
+      const saved = localStorage.getItem('phantom_equipped'); 
+      const parsed = saved ? JSON.parse(saved) : {};
+      return { 
+          theme: parsed.theme || 'theme_default',
+          effect_monitor: parsed.effect_monitor || 'default',
+          effect_im: parsed.effect_im || 'default',
+          effect_marker: parsed.effect_marker || 'default'
+      }; 
+  });
   const [showShop, setShowShop] = useState(false);
 
   // Load Papers from Vault (Backend)
@@ -496,24 +509,32 @@ function App() {
   };
 
   const handleEquip = (item: ShopItem) => {
-      if (item.type === 'THEME') {
-          setEquipped(prev => ({ ...prev, theme: item.id }));
-      }
+      setEquipped(prev => {
+          if (item.type === 'THEME') return { ...prev, theme: item.id };
+          // Determine slot based on item ID prefix or type
+          if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) return { ...prev, effect_monitor: item.value || 'default' };
+          if (item.id.startsWith('skin_')) return { ...prev, effect_im: item.value || 'default' };
+          if (item.id.startsWith('marker_')) return { ...prev, effect_marker: item.value || 'default' };
+          return prev;
+      });
   };
+
+  const currentThemeColor = equipped.theme === 'theme_royal' ? '#D4AF37' : 
+                            equipped.theme === 'theme_velvet' ? '#1a45a0' : 
+                            equipped.theme === 'theme_tv' ? '#FFE600' :
+                            equipped.theme === 'theme_hacker' ? '#00FF41' :
+                            '#E60012';
 
   return (
     <div 
         className={`flex h-screen w-screen bg-phantom-black overflow-hidden font-sans relative bg-halftone bg-noise transition-colors duration-1000 ${uiMode === 'safe' ? 'mode-safe' : ''} text-[var(--color-text)]`}
-        style={{
-            // Dynamic Theme Variables
-            '--phantom-red': equipped.theme === 'theme_royal' ? '#D4AF37' : 
-                             equipped.theme === 'theme_velvet' ? '#1a45a0' : 
-                             equipped.theme === 'theme_tv' ? '#FFE600' :
-                             equipped.theme === 'theme_hacker' ? '#00FF41' :
-                             '#E60012'
-        } as React.CSSProperties}
     >
-      <SystemMonitor /> {/* Add Monitor */}
+      <style>{`
+        :root {
+          --phantom-red: ${currentThemeColor} !important;
+        }
+      `}</style>
+      <SystemMonitor variant={equipped.effect_monitor} /> {/* Add Monitor */}
       <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
       <HackProgress show={hackProgress.show} stage={hackProgress.stage} message={hackProgress.message} />
       <TransitionCurtain isActive={showCurtain} />
@@ -579,7 +600,7 @@ function App() {
          />
       </div>
       <AnimatePresence>
-        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} />}
+        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} />}
         {showSubway && <SubwayOverlay papers={papers} folders={folders} onClose={() => setShowSubway(false)} onRead={handleRead} playSfx={playSfx} />}
         {fusionResult && fusionTargetIds.length === 2 && (
             <FusionWorkspace 
@@ -591,7 +612,7 @@ function App() {
             />
         )}
       </AnimatePresence>
-      <PhantomIM />
+      <PhantomIM variant={equipped.effect_im} />
     </div>
   );
 }

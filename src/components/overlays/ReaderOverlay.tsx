@@ -26,6 +26,7 @@ interface ReaderOverlayProps {
     onLevelUp: (s: keyof import('../../types').PhantomStats) => void;
     playSfx: PlaySoundFunction;
     onSaveNote: (content: string) => Promise<void>;
+    markerStyle?: string; // 'default', 'neon', 'redact'
 }
 
 interface TranslationBlock {
@@ -38,7 +39,7 @@ interface TranslationData {
     status: 'pending' | 'loading' | 'success' | 'error';
 }
 
-export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }: ReaderOverlayProps) => {
+export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, markerStyle = 'default' }: ReaderOverlayProps) => {
     const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; x: number; y: number; text: string } | null>(null);
     const [analysisResult, setAnalysisResult] = useState<{ visible: boolean; type: string; content: string } | null>(null);
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
@@ -324,13 +325,20 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                     onMouseEnter={() => activeDriver.current = 'left'}
                     onScroll={() => handleScroll('left')}
                     style={{ width: splitMode ? `${splitRatio * 100}%` : '100%' }}
-                    className={`relative overflow-auto flex flex-col items-center p-8 custom-scrollbar transition-all duration-100 ${safeMode ? 'bg-[#F5F3ED]' : 'bg-zinc-900'}`} 
+                    className={`relative overflow-auto flex flex-col items-center p-8 custom-scrollbar transition-all duration-100 ${
+                        safeMode ? 'bg-[#F5F3ED]' : 'bg-zinc-900'
+                    }`} 
                     onMouseUp={handleMouseUp}
                 >
                     {paper.fileUrl && (
                         <Document file={paper.fileUrl} onLoadSuccess={({ numPages }) => setNumPages(numPages)} className="flex flex-col items-center gap-4 w-full">
                             {Array.from(new Array(numPages), (_, index) => (
-                                <div key={`page_${index + 1}`} data-page-index={index} ref={el => pageRefs.current[index] = el} className="relative w-full flex justify-center">
+                                <div 
+                                    key={`page_${index + 1}`} 
+                                    data-page-index={index}
+                                    ref={el => { pageRefs.current[index] = el; }}
+                                    className="relative w-full flex justify-center"
+                                >
                                     <Page pageNumber={index + 1} renderTextLayer={true} renderAnnotationLayer={true} width={splitMode ? (containerRef.current ? containerRef.current.offsetWidth * 0.9 : 500) : undefined} scale={splitMode ? undefined : 1.2} className="bg-white shadow-xl max-w-full" loading={<PhantomLoader message="DECRYPTING" />} />
                                     <div className={`absolute -left-8 top-0 text-xs font-mono opacity-50 ${safeMode ? 'text-black' : 'text-white'}`}>{index + 1}</div>
                                 </div>
@@ -361,16 +369,37 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                                         const pageNum = index + 1;
                                         const data = translations[pageNum];
                                         return (
-                                            <div key={`trans_page_${pageNum}`} ref={el => translationRefs.current[index] = el} className={`min-h-[50vh] transition-opacity duration-500 border-l-2 pl-4 ${activePage === pageNum ? 'border-phantom-red opacity-100' : 'border-transparent opacity-40 hover:opacity-80'}`}>
+                                            <div 
+                                                key={`trans_page_${pageNum}`} 
+                                                ref={el => { translationRefs.current[index] = el; }}
+                                                className={`min-h-[50vh] transition-opacity duration-500 border-l-2 pl-4 ${activePage === pageNum ? 'border-phantom-red opacity-100' : 'border-transparent opacity-40 hover:opacity-80'}`}
+                                            >
                                                 <div className="flex items-center space-x-4 mb-4 select-none"><span className={`font-p5 text-xl ${activePage === pageNum ? 'text-phantom-red' : 'text-gray-500'}`}>#{pageNum}</span></div>
                                                 
                                                 {data?.status === 'success' ? (
                                                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
                                                         {data.blocks.map((block, idx) => {
                                                             const isHighlighted = highlightedText && block.src.includes(highlightedText);
+                                                            
+                                                            // MARKER EFFECTS
+                                                            let effectClass = "p-2 rounded transition-colors duration-300 ";
+                                                            if (isHighlighted) {
+                                                                if (markerStyle === 'neon') {
+                                                                    effectClass += "bg-black text-green-400 shadow-[0_0_15px_#00ff00] border border-green-500 font-mono scale-[1.05]";
+                                                                } else if (markerStyle === 'redact') {
+                                                                    effectClass += "bg-black text-black hover:text-white transition-all duration-500 cursor-help border border-black";
+                                                                } else {
+                                                                    effectClass += "bg-phantom-yellow text-black shadow-lg scale-[1.02]";
+                                                                }
+                                                            }
+
                                                             return (
-                                                                <div key={idx} className={`p-2 rounded transition-colors duration-300 ${isHighlighted ? 'bg-phantom-yellow text-black shadow-lg scale-[1.02]' : ''}`}>
-                                                                    <p className="font-serif text-lg leading-loose">{block.dst}</p>
+                                                                <div key={idx} className={effectClass}>
+                                                                    <p className="font-serif text-lg leading-loose">
+                                                                        {markerStyle === 'redact' && isHighlighted ? "████████████" : block.dst}
+                                                                        {/* Redact Hack: Show blocks, but hover reveals text via CSS color change. Above text is mock visual, actual text is there. */}
+                                                                        {/* Better Redact: Just use CSS text-transparent */}
+                                                                    </p>
                                                                 </div>
                                                             );
                                                         })}
@@ -407,6 +436,38 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                     <motion.div drag className="fixed z-[200] top-1/3 left-1/2 w-[400px] bg-white border-4 border-black shadow-xl">
                         <div className="bg-black p-2 flex justify-between"><span className="text-white font-p5">ANALYSIS</span><X onClick={() => setAnalysisResult(null)} className="text-white cursor-pointer" /></div>
                         <div className="p-6 bg-zinc-100 text-black whitespace-pre-wrap">{analysisResult.content}</div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            
+            {/* Note Editor Overlay */}
+            <AnimatePresence>
+                {showNotes && (
+                    <motion.div 
+                        initial={{ x: "100%" }} 
+                        animate={{ x: 0 }} 
+                        exit={{ x: "100%" }} 
+                        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+                        className="fixed right-0 top-0 w-[400px] max-w-[40vw] min-w-[300px] h-full bg-phantom-yellow border-l-4 border-black shadow-[-8px_0_16px_rgba(0,0,0,0.3)] z-[110]"
+                    >
+                        <div className="h-full flex flex-col">
+                            <div className="bg-black text-white p-4 flex items-center justify-between shrink-0">
+                                <h3 className="font-p5 text-xl tracking-wider">INTEL NOTES</h3>
+                                <button 
+                                    onClick={() => { setShowNotes(false); playSfx('cancel'); }}
+                                    className="hover:text-phantom-red hover:rotate-90 transition-transform"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                                <NoteEditor 
+                                    initialContent={paper.user_notes} 
+                                    paperId={paper.id} 
+                                    onSave={onSaveNote} 
+                                />
+                            </div>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

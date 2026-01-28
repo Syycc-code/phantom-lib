@@ -23,7 +23,7 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
   return (
     <div className={`h-full border-r-4 p-6 flex flex-col w-72 shrink-0 relative overflow-hidden z-20 transition-colors duration-500 ${isVelvet ? 'bg-[#000033] border-[#D4AF37]' : 'bg-phantom-black border-phantom-red'}`}>
         <div className="absolute top-0 left-0 w-full h-full bg-halftone opacity-50 pointer-events-none" />
-        <div className="mb-10 relative transform -rotate-6 origin-top-left cursor-default">
+        <div className="mb-10 relative transform -rotate-6 origin-top-left cursor-default -ml-4">
             <h1 className={`font-p5 tracking-tighter leading-none ${isVelvet ? 'text-[#D4AF37]' : 'text-white'}`} style={{ textShadow: isVelvet ? "2px 2px 0px #000" : "4px 4px 0px #E60012" }}>
                 <span className="text-8xl font-black">P</span>
                 <span className="text-5xl">HANTOM</span>

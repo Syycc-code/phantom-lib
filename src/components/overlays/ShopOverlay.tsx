@@ -6,7 +6,7 @@ import type { PhantomStats, PlaySoundFunction } from '../../types';
 interface ShopOverlayProps {
     stats: PhantomStats;
     inventory: string[];
-    equipped: { theme: string };
+    equipped: { theme: string, effect_monitor: string, effect_im: string, effect_marker: string };
     onClose: () => void;
     onPurchase: (item: ShopItem) => void;
     onEquip: (item: ShopItem) => void;
@@ -68,6 +68,63 @@ export const SHOP_ITEMS: ShopItem[] = [
         cost: 2,
         currency: 'proficiency',
         value: '#00FF41'
+    },
+    // --- MONITOR LENSES ---
+    {
+        id: 'visualizer_audio',
+        name: 'AUDIO VISUALIZER',
+        type: 'EFFECT',
+        desc: 'Visualize the rhythm of the cognitive world.',
+        cost: 3,
+        currency: 'charm',
+        value: 'visualizer'
+    },
+    {
+        id: 'radar_threat',
+        name: 'THREAT RADAR',
+        type: 'EFFECT',
+        desc: 'Detects network anomalies and cognitive distortion.',
+        cost: 2,
+        currency: 'guts',
+        value: 'radar'
+    },
+    // --- IM SKINS ---
+    {
+        id: 'skin_sns',
+        name: 'SNS STYLE',
+        type: 'EFFECT',
+        desc: 'Anonymous chat network for the Phantom Thieves.',
+        cost: 4,
+        currency: 'charm',
+        value: 'sns'
+    },
+    {
+        id: 'skin_terminal',
+        name: 'RETRO TERMINAL',
+        type: 'EFFECT',
+        desc: 'Direct link to the Metaverse database.',
+        cost: 4,
+        currency: 'knowledge',
+        value: 'terminal'
+    },
+    // --- COGNITIVE MARKERS ---
+    {
+        id: 'marker_neon',
+        name: 'NEON HIGHLIGHTER',
+        type: 'EFFECT',
+        desc: 'Highlights truth in the darkness.',
+        cost: 2,
+        currency: 'proficiency',
+        value: 'neon'
+    },
+    {
+        id: 'marker_redact',
+        name: 'REDACTION TAPE',
+        type: 'EFFECT',
+        desc: 'For eyes only. Hides sensitive intel.',
+        cost: 3,
+        currency: 'knowledge',
+        value: 'redact'
     }
 ];
 
@@ -174,11 +231,16 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                 <div className="w-2/3 bg-zinc-900 flex flex-col">
                     {/* Item List */}
                     <div className="flex-1 overflow-y-auto p-8 grid grid-cols-2 gap-4 content-start custom-scrollbar">
-                        {SHOP_ITEMS.map((item) => {
-                            const isOwned = inventory.includes(item.id);
-                            const isEquipped = equipped.theme === item.id;
-                            const isSelected = selectedItem?.id === item.id;
-                            const canAfford = stats[item.currency] >= item.cost;
+                            {SHOP_ITEMS.map((item) => {
+                                const isOwned = inventory.includes(item.id);
+                                let isEquipped = false;
+                                if (item.type === 'THEME') isEquipped = equipped.theme === item.id;
+                                else if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === item.value;
+                                else if (item.id.startsWith('skin_')) isEquipped = equipped.effect_im === item.value;
+                                else if (item.id.startsWith('marker_')) isEquipped = equipped.effect_marker === item.value;
+
+                                const isSelected = selectedItem?.id === item.id;
+                                const canAfford = stats[item.currency] >= item.cost;
 
                             return (
                                 <motion.div
@@ -250,14 +312,29 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                 {inventory.includes(selectedItem.id) ? (
                                     <button 
                                         onClick={handleAction}
-                                        disabled={equipped.theme === selectedItem.id}
+                                        disabled={
+                                            (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
+                                            (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
+                                            (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
+                                            (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
+                                            (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
+                                        }
                                         className={`px-8 py-3 font-p5 text-xl uppercase tracking-widest transition-all ${
-                                            equipped.theme === selectedItem.id
+                                            (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
+                                            (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
+                                            (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
+                                            (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
+                                            (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
                                                 ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                                 : 'bg-white text-black hover:bg-phantom-red hover:text-white'
                                         }`}
                                     >
-                                        {equipped.theme === selectedItem.id ? "EQUIPPED" : "EQUIP NOW"}
+                                        {(selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
+                                         (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
+                                         (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
+                                         (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
+                                         (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
+                                            ? "EQUIPPED" : "EQUIP NOW"}
                                     </button>
                                 ) : (
                                     <button 

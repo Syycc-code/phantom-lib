@@ -2,9 +2,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Fjalla+One&family=Inter:wght@400;700&display=swap');
 
 @theme {
-  --color-phantom-red: #E60012;
+  --color-phantom-red: var(--phantom-red);
   --color-phantom-black: #111111;
-  --color-phantom-yellow: #FCEC0C;
+  --color-phantom-yellow: var(--phantom-yellow);
   --animate-spin-slow: spin 3s linear infinite;
   
   --font-p5: "Fjalla One", sans-serif;
@@ -14,6 +14,9 @@
 /* Import Fonts - Moved to top */
 
 :root {
+  --phantom-red: #E60012; /* Default Red */
+  --phantom-yellow: #FCEC0C; /* Default Yellow */
+  
   font-family: var(--font-body);
   line-height: 1.5;
   color-scheme: dark;
