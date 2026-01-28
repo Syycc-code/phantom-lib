@@ -191,6 +191,32 @@ function App() {
 
   // Load Papers from Vault (Backend)
   useEffect(() => {
+    const fetchPapers = async () => {
+      try {
+        const res = await fetch('/api/papers');
+        if (res.ok) {
+          const data = await res.json();
+          // Map backend data to frontend Paper type
+          const mappedPapers = data.map((p: any) => ({
+            ...p,
+            type: p.url && p.url.toLowerCase().includes('arxiv') ? 'Arxiv' : 'PDF',
+            tags: p.shadow_problem ? ['Analyzed'] : ['New'],
+            fileUrl: `/api/papers/${p.id}/pdf`,
+            content: p.abstract || '',
+            ocrStatus: 'complete'
+          }));
+          setPapers(mappedPapers);
+        }
+      } catch (e) {
+        console.error("Failed to fetch papers:", e);
+      }
+    };
+    
+    fetchPapers();
+  }, []);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
           if (e.key === 'Tab') {
               e.preventDefault();

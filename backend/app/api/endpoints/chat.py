@@ -32,8 +32,14 @@ async def chat_stream(request: ChatRequest):
     async def generate():
         try:
             # 1. RAG
+            print(f"[CHAT] Starting RAG... Available: {RAG_AVAILABLE}")
             if RAG_AVAILABLE:
-                context_text, sources = await asyncio.to_thread(retrieve_context, request.query)
+                try:
+                    context_text, sources = await asyncio.to_thread(retrieve_context, request.query)
+                    print(f"[CHAT] RAG Complete. Sources: {len(sources)}")
+                except Exception as e:
+                    print(f"[CHAT] RAG Failed: {e}")
+                    context_text, sources = "", []
             else:
                 context_text, sources = "", []
 

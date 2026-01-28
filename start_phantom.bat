@@ -9,9 +9,9 @@ echo ========================================================
 echo.
 echo [*] Initializing Cognitive Engine...
 
-:: 1. Start Backend (Python)
+:: 1. Start Backend (Python) - REMOVED --reload for RAG stability
 echo [*] Launching Backend Node (Port 8000)...
-start "Phantom Backend" cmd /k "cd backend && title BACKEND && echo [PHANTOM] Waiting for connection... && uvicorn app.main:app --reload --host 0.0.0.0"
+start "Phantom Backend" cmd /k "cd backend && title BACKEND && echo [PHANTOM] Starting Server... && C:\Users\26320\anaconda3\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 :: 2. Wait for Backend to warm up
 timeout /t 3 /nobreak >nul

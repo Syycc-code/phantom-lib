@@ -1,3 +1,15 @@
+import os
+import sys
+
+# FIX: Windows DLL Load Error for Torch/Numpy
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# FIX: Force load mkl/intel libraries if present
+try:
+    import numpy
+except ImportError:
+    pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager

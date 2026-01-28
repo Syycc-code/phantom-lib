@@ -11,11 +11,13 @@ deepseek_client = AsyncOpenAI(
 )
 
 try:
-    # FORCE DISABLE RAG FOR DEBUGGING
-    # import chromadb
-    # from sentence_transformers import SentenceTransformer
-    RAG_AVAILABLE = False
-except ImportError:
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+    from sentence_transformers import SentenceTransformer
+    RAG_AVAILABLE = True
+except ImportError as e:
+    print(f"[RAG WARNING] Missing dependencies: {e}. RAG features disabled.")
+    print("Install via: pip install chromadb sentence-transformers")
     RAG_AVAILABLE = False
     chroma_client = None
     knowledge_collection = None
@@ -28,7 +30,7 @@ _embedder = None
 _rag_initialized = False
 
 def get_rag_components():
-    global _chroma_client, _knowledge_collection, _embedder, _rag_initialized
+    global _chroma_client, _knowledge_collection, _embedder, _rag_initialized, RAG_AVAILABLE
     
     if _rag_initialized:
         return _chroma_client, _knowledge_collection, _embedder
@@ -42,17 +44,37 @@ def get_rag_components():
         os.makedirs(persist_path, exist_ok=True)
         
         print(f"[PHANTOM] Initializing RAG (Lazy)... Path: {persist_path}")
-        _chroma_client = chromadb.PersistentClient(path=persist_path)
-        _knowledge_collection = _chroma_client.get_or_create_collection(name="phantom_knowledge")
         
-        print(f"[PHANTOM] Loading Embedding Model...")
-        _embedder = SentenceTransformer('all-MiniLM-L6-v2')
-        print("[PHANTOM] RAG Ready.")
-        
+        # Initialize one by one to catch specific errors
+        try:
+            # FIX: Disable telemetry and anonymized data to prevent network hangs
+            # FIX: Use 'is_persistent=True' explicity if needed, but PersistentClient implies it.
+            # Using basic PersistentClient is usually fine if path is correct.
+            _chroma_client = chromadb.PersistentClient(
+                path=persist_path,
+                settings=ChromaSettings(anonymized_telemetry=False, allow_reset=True)
+            )
+            _knowledge_collection = _chroma_client.get_or_create_collection(name="phantom_knowledge")
+            print("[PHANTOM] ChromaDB Connected.")
+        except Exception as e:
+            print(f"[PHANTOM] ChromaDB Init Failed: {e}")
+            raise e
+
+        try:
+            print(f"[PHANTOM] Loading Embedding Model (this may take a moment)...")
+            # Force CPU if CUDA OOM or issues
+            _embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu') 
+            print("[PHANTOM] Embedding Model Loaded.")
+        except Exception as e:
+             print(f"[PHANTOM] Model Load Failed: {e}")
+             raise e
+
         _rag_initialized = True
         return _chroma_client, _knowledge_collection, _embedder
     except Exception as e:
-        print(f"[PHANTOM] RAG Init Failed: {e}")
+        print(f"[PHANTOM] RAG CRITICAL FAILURE: {e}")
+        # Disable RAG to prevent loop
+        RAG_AVAILABLE = False
         return None, None, None
 
 def index_document(text: str, filename: str):
