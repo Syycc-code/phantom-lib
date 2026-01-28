@@ -33,8 +33,8 @@ async def upload_paper_from_url(
         # 1. 解析URL（业务逻辑已转移至 url_parser）
         download_url, year = parse_url(url)
         
-        # 2. 下载文件
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # 2. 下载文件（增加超时时间）
+        async with httpx.AsyncClient(timeout=120.0) as client:  # 2分钟超时
             resp = await client.get(download_url, follow_redirects=True)
             if resp.status_code != 200:
                 raise HTTPException(

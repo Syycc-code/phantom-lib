@@ -111,3 +111,13 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #fff;
 }
+
+/* 4. Custom Animations */
+@keyframes scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(500%);
+  }
+}

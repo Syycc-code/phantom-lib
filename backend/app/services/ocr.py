@@ -22,8 +22,10 @@ def extract_text_from_file_sync(file_content: bytes, filename: str) -> str:
     try:
         if filename.lower().endswith(".pdf"):
             with fitz.open(stream=file_content, filetype="pdf") as doc:
-                # Process all pages
-                target_pages = range(doc.page_count)
+                # 只处理前5页，避免超时（快速预览模式）
+                max_pages = min(5, doc.page_count)
+                target_pages = range(max_pages)
+                
                 for page_num in target_pages:
                     page = doc.load_page(page_num)
                     text = page.get_text()
@@ -38,6 +40,10 @@ def extract_text_from_file_sync(file_content: bytes, filename: str) -> str:
                         result, _ = ocr_engine(pix.tobytes("png"))
                         if result:
                             extracted_text += f"\n--- Page {page_num+1} (OCR) ---\n" + "\n".join([line[1] for line in result])
+                
+                # 如果文档很长，添加提示
+                if doc.page_count > max_pages:
+                    extracted_text += f"\n\n[... {doc.page_count - max_pages} more pages not shown in preview ...]"
                             
         elif filename.lower().endswith(('.png', '.jpg', '.jpeg')) and ocr_engine:
             result, _ = ocr_engine(file_content)

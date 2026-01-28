@@ -47,6 +47,11 @@ async def analyze_paper_content(abstract: str, full_text: str = ""):
             response_format={"type": "json_object"}
         )
         content = response.choices[0].message.content
+        
+        # Handle None content
+        if not content:
+            raise ValueError("AI returned empty response")
+            
         return json.loads(content)
     except Exception as e:
         print(f"[ANALYSIS ERROR] {e}")

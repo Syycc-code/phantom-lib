@@ -36,6 +36,7 @@ import {
   TransitionCurtain,
   CallingCard
 } from './components';
+import { HackProgress } from './components/shared/HackProgress';
 import SystemMonitor from './components/SystemMonitor';
 import { UploadProgress } from './components/shared/UploadProgress';
 import LeftPane from './components/panes/LeftPane';
@@ -48,10 +49,7 @@ import { INITIAL_FOLDERS, INITIAL_PAPERS } from './constants';
 type FolderType = Folder;
 
 // --- PDF WORKER SETUP ---
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 // --- AUDIO ENGINE (SYNTHESIZER) ---
 const useAudioSystem = () => {
@@ -210,6 +208,7 @@ function App() {
   const [showCallingCard, setShowCallingCard] = useState<'success' | 'fail' | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0 });
+  const [hackProgress, setHackProgress] = useState<{ show: boolean, stage: "download" | "ocr" | "analyze" | "complete", message?: string }>({ show: false, stage: "download" });
   
   // Safe Mode (Reading Mode) Logic
   const [uiMode, setUiMode] = useState<'heist' | 'safe'>('heist');
@@ -282,14 +281,31 @@ function App() {
   const handleAddPaper = async (url: string) => { 
       playSfx('confirm');
       try {
+          // Show download stage
+          setHackProgress({ show: true, stage: 'download', message: 'Connecting to target...' });
+          
+          // 增加超时时间到3分钟
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000); // 3分钟
+          
           const res = await fetch('/api/upload/url', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url })
+              body: JSON.stringify({ url }),
+              signal: controller.signal
           });
           
+          clearTimeout(timeoutId);
+          
           if (res.ok) {
+              // Show OCR stage
+              setHackProgress({ show: true, stage: 'ocr', message: 'Scanning document...' });
+              
               const p = await res.json();
+              
+              // Show analyze stage
+              setHackProgress({ show: true, stage: 'analyze', message: 'Extracting treasure...' });
+              
               const mappedPaper = {
                   ...p,
                   type: "WEB",
@@ -299,6 +315,14 @@ function App() {
               };
               setPapers(prev => [mappedPaper, ...prev]);
               handleLevelUp('proficiency');
+              
+              // Show complete stage
+              setHackProgress({ show: true, stage: 'complete', message: 'Treasure secured!' });
+              
+              // Hide progress after 2 seconds
+              setTimeout(() => {
+                  setHackProgress({ show: false, stage: 'download' });
+              }, 2000);
               
               // Show Calling Card
               setShowCallingCard('success');
@@ -316,7 +340,16 @@ function App() {
       } catch (e) {
           console.error("URL Upload Failed:", e);
           playSfx('cancel');
-          alert("TARGET LINK SEVERED. (Check URL or Network)");
+          
+          // Hide progress on error
+          setHackProgress({ show: false, stage: 'download' });
+          
+          // 区分超时和其他错误
+          if (e instanceof Error && e.name === 'AbortError') {
+              alert("HACK TIMEOUT: Target too large or network too slow. Try again or use smaller file.");
+          } else {
+              alert("TARGET LINK SEVERED. (Check URL or Network)");
+          }
       }
   };
 
@@ -442,6 +475,7 @@ function App() {
     <div className={`flex h-screen w-screen bg-phantom-black overflow-hidden font-sans relative bg-halftone bg-noise transition-colors duration-1000 ${uiMode === 'safe' ? 'mode-safe' : ''} text-[var(--color-text)]`}>
       <SystemMonitor /> {/* Add Monitor */}
       <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
+      <HackProgress show={hackProgress.show} stage={hackProgress.stage} message={hackProgress.message} />
       <TransitionCurtain isActive={showCurtain} />
       <CallingCard show={showCallingCard === 'success'} onComplete={() => { setShowCallingCard(null); setActiveMenu('all'); }} />
       <RankUpNotification stat={showRankUp} />

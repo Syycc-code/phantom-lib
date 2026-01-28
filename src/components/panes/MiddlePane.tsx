@@ -38,15 +38,22 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
         return false; 
     });
 
-    const handleSteal = (e: React.FormEvent) => { 
+    const handleSteal = async (e: React.FormEvent) => { 
         e.preventDefault(); 
+        if (!inputUrl.trim()) return;
+        
         setIsStealing(true); 
         playSfx('confirm'); 
-        setTimeout(() => { 
-            onAddPaper(inputUrl); 
+        
+        try {
+            await onAddPaper(inputUrl); 
             setInputUrl(''); 
+        } catch (error) {
+            console.error('Steal failed:', error);
+            playSfx('cancel');
+        } finally {
             setIsStealing(false); 
-        }, 1000); 
+        }
     };
 
     const toggleSelection = (id: number) => { 
@@ -190,10 +197,27 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                                 value={inputUrl}
                                 onChange={(e) => setInputUrl(e.target.value)}
                                 placeholder="TARGET URL (ARXIV / PDF)..." 
-                                className="flex-1 bg-black border-2 border-phantom-red text-white px-4 py-2 font-mono outline-none focus:bg-zinc-900"
+                                disabled={isStealing}
+                                className="flex-1 bg-black border-2 border-phantom-red text-white px-4 py-2 font-mono outline-none focus:bg-zinc-900 disabled:opacity-50"
                             />
-                            <button type="submit" disabled={isStealing} className="bg-phantom-red text-black font-bold px-4 hover:bg-white transition-colors">
-                                {isStealing ? 'STEALING...' : 'HACK'}
+                            <button 
+                                type="submit" 
+                                disabled={isStealing || !inputUrl.trim()} 
+                                className="relative bg-phantom-red text-black font-bold px-6 py-2 hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                            >
+                                {isStealing ? (
+                                    <>
+                                        <span className="relative z-10">HACKING...</span>
+                                        <div className="absolute inset-0 bg-phantom-yellow animate-pulse opacity-50" />
+                                        <div 
+                                            className="absolute top-0 left-0 h-full bg-white/30" 
+                                            style={{
+                                                width: '20%',
+                                                animation: 'scan 1s linear infinite'
+                                            }}
+                                        />
+                                    </>
+                                ) : 'HACK'}
                             </button>
                         </form>
 

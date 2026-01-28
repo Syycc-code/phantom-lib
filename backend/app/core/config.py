@@ -5,10 +5,12 @@ from dotenv import load_dotenv
 # Try to find .env file
 # Structure: backend/app/core/config.py -> backend/app/core -> backend/app -> backend -> root
 env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+print(f"[CONFIG] Loading environment from: {env_path}")
 load_dotenv(dotenv_path=env_path)
 
 # Fallback
 if not os.getenv("DEEPSEEK_API_KEY"):
+    print("[CONFIG] .env not found at calculated path, trying default load_dotenv()")
     load_dotenv() 
 
 class Settings:
@@ -32,6 +34,13 @@ class Settings:
     UPLOAD_DIR: str = "uploads"
 
 settings = Settings()
+
+# Log API Key Status
+if settings.DEEPSEEK_API_KEY == "mock-key":
+    print("[CONFIG] ⚠️  WARNING: Using 'mock-key'. AI features will be disabled.")
+else:
+    masked_key = f"{settings.DEEPSEEK_API_KEY[:5]}...{settings.DEEPSEEK_API_KEY[-3:]}"
+    print(f"[CONFIG] ✅ DeepSeek API Key loaded: {masked_key}")
 
 # Apply Global Envs
 os.environ["HF_ENDPOINT"] = settings.HF_ENDPOINT

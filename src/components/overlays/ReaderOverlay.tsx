@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Paper, PlaySoundFunction } from '../../types';
 import { NoteEditor } from '../shared/NoteEditor';
+import { PhantomLoader } from '../shared/PhantomLoader';
 
 interface ReaderOverlayProps {
     paper: Paper;
@@ -197,7 +198,7 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                                     renderAnnotationLayer={true}
                                     scale={1.2}
                                     className="bg-white shadow-xl"
-                                    loading={<div className="h-[800px] w-[600px] bg-white flex items-center justify-center"><Loader2 className="animate-spin text-phantom-red"/></div>}
+                                    loading={<PhantomLoader message="DECRYPTING" submessage="Extracting Cognitive Data..." />}
                                 />
                             ))}
                         </Document>

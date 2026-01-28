@@ -62,9 +62,12 @@ async def process_paper(
     session.commit()
     session.refresh(new_paper)
     
-    # 4. 触发后台任务
+    # 4. 触发后台任务（添加安全检查）
     asyncio.create_task(asyncio.to_thread(index_document, preview_text, filename))
-    asyncio.create_task(_run_analysis(new_paper.id, new_paper.abstract, session.bind))
+    
+    # 只在有ID和abstract时触发分析
+    if new_paper.id and new_paper.abstract:
+        asyncio.create_task(_run_analysis(new_paper.id, new_paper.abstract, session.bind))
     
     return new_paper
 
