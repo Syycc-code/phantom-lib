@@ -51,11 +51,11 @@ import { INITIAL_FOLDERS, INITIAL_PAPERS } from './constants';
 type FolderType = Folder;
 
 // --- PDF WORKER SETUP ---
-// try {
-//     pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-// } catch (e) {
-//     console.error("PDF Worker Init Failed", e);
-// }
+try {
+    pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+} catch (e) {
+    console.error("PDF Worker Init Failed", e);
+}
 
 // --- AUDIO ENGINE (SYNTHESIZER) ---
 const useAudioSystem = () => {
@@ -510,12 +510,26 @@ function App() {
 
   const handleEquip = (item: ShopItem) => {
       setEquipped(prev => {
-          if (item.type === 'THEME') return { ...prev, theme: item.id };
+          const next = { ...prev };
+          if (item.type === 'THEME') next.theme = item.id;
           // Determine slot based on item ID prefix or type
-          if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) return { ...prev, effect_monitor: item.value || 'default' };
-          if (item.id.startsWith('skin_')) return { ...prev, effect_im: item.value || 'default' };
-          if (item.id.startsWith('marker_')) return { ...prev, effect_marker: item.value || 'default' };
-          return prev;
+          if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) next.effect_monitor = item.value || 'default';
+          if (item.id.startsWith('skin_')) next.effect_im = item.value || 'default';
+          if (item.id.startsWith('marker_')) next.effect_marker = item.value || 'default';
+          return next;
+      });
+  };
+
+  const handleUnequip = (item: ShopItem) => {
+      setEquipped(prev => {
+          const next = { ...prev };
+          // Themes cannot be unequipped, only switched
+          if (item.type === 'THEME') return prev;
+          
+          if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) next.effect_monitor = 'default';
+          if (item.id.startsWith('skin_')) next.effect_im = 'default';
+          if (item.id.startsWith('marker_')) next.effect_marker = 'default';
+          return next;
       });
   };
 
@@ -551,6 +565,7 @@ function App() {
               onClose={() => setShowShop(false)} 
               onPurchase={handlePurchase}
               onEquip={handleEquip}
+              onUnequip={handleUnequip}
               playSfx={playSfx} 
           />
       )}

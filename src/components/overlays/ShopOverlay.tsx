@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingBag, Lock, Check, AlertTriangle, Palette, Music, Sparkles } from 'lucide-react';
+import { X, ShoppingBag, Lock, Check, AlertTriangle, Palette, Music, Sparkles, Trash2 } from 'lucide-react';
 import type { PhantomStats, PlaySoundFunction } from '../../types';
 
 interface ShopOverlayProps {
@@ -10,6 +10,7 @@ interface ShopOverlayProps {
     onClose: () => void;
     onPurchase: (item: ShopItem) => void;
     onEquip: (item: ShopItem) => void;
+    onUnequip: (item: ShopItem) => void;
     playSfx: PlaySoundFunction;
 }
 
@@ -128,9 +129,13 @@ export const SHOP_ITEMS: ShopItem[] = [
     }
 ];
 
-export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, onEquip, playSfx }: ShopOverlayProps) => {
+export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, onEquip, onUnequip, playSfx }: ShopOverlayProps) => {
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
+    const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
     const [confirming, setConfirming] = useState(false);
+
+    // Prioritize hover item, then selected item
+    const activeDisplayItem = hoveredItem || selectedItem;
 
     const handleItemClick = (item: ShopItem) => {
         setSelectedItem(item);
@@ -143,9 +148,24 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
 
         const isOwned = inventory.includes(selectedItem.id);
         
+        let isEquipped = false;
+        if (selectedItem.type === 'THEME') isEquipped = equipped.theme === selectedItem.id;
+        else if (selectedItem.id.startsWith('visualizer_') || selectedItem.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === selectedItem.value;
+        else if (selectedItem.id.startsWith('skin_')) isEquipped = equipped.effect_im === selectedItem.value;
+        else if (selectedItem.id.startsWith('marker_')) isEquipped = equipped.effect_marker === selectedItem.value;
+
         if (isOwned) {
-            onEquip(selectedItem);
-            playSfx('confirm');
+            if (isEquipped) {
+                // Unequip Logic (Only for non-themes)
+                if (selectedItem.type !== 'THEME') {
+                    onUnequip(selectedItem);
+                    playSfx('cancel'); // Sound for unequip
+                }
+            } else {
+                // Equip Logic
+                onEquip(selectedItem);
+                playSfx('confirm');
+            }
         } else {
             // Purchase Logic
             if (confirming) {
@@ -198,18 +218,18 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                         <div className="space-y-4 font-mono text-sm">
                             {Object.entries(stats).map(([key, val]) => (
                                 <div key={key} className="flex justify-between items-center group">
-                                    <span className={`uppercase transition-colors ${selectedItem?.currency === key ? 'text-phantom-red font-bold' : 'text-gray-400'}`}>
+                                    <span className={`uppercase transition-colors ${activeDisplayItem?.currency === key ? 'text-phantom-red font-bold' : 'text-gray-400'}`}>
                                         {key}
                                     </span>
                                     <div className="flex items-center gap-2">
-                                        {selectedItem && selectedItem.currency === key && !inventory.includes(selectedItem.id) && (
+                                        {activeDisplayItem && activeDisplayItem.currency === key && !inventory.includes(activeDisplayItem.id) && (
                                             <span className="text-red-500 animate-pulse">
-                                                -{selectedItem.cost}
+                                                -{activeDisplayItem.cost}
                                             </span>
                                         )}
                                         <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden">
                                             <motion.div 
-                                                className={`h-full ${selectedItem?.currency === key ? 'bg-phantom-red' : 'bg-white'}`}
+                                                className={`h-full ${activeDisplayItem?.currency === key ? 'bg-phantom-red' : 'bg-white'}`}
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${(val / 10) * 100}%` }}
                                             />
@@ -231,25 +251,30 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                 <div className="w-2/3 bg-zinc-900 flex flex-col">
                     {/* Item List */}
                     <div className="flex-1 overflow-y-auto p-8 grid grid-cols-2 gap-4 content-start custom-scrollbar">
-                            {SHOP_ITEMS.map((item) => {
-                                const isOwned = inventory.includes(item.id);
-                                let isEquipped = false;
-                                if (item.type === 'THEME') isEquipped = equipped.theme === item.id;
-                                else if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === item.value;
-                                else if (item.id.startsWith('skin_')) isEquipped = equipped.effect_im === item.value;
-                                else if (item.id.startsWith('marker_')) isEquipped = equipped.effect_marker === item.value;
+                        {SHOP_ITEMS.map((item) => {
+                            const isOwned = inventory.includes(item.id);
+                            let isEquipped = false;
+                            if (item.type === 'THEME') isEquipped = equipped.theme === item.id;
+                            else if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === item.value;
+                            else if (item.id.startsWith('skin_')) isEquipped = equipped.effect_im === item.value;
+                            else if (item.id.startsWith('marker_')) isEquipped = equipped.effect_marker === item.value;
 
-                                const isSelected = selectedItem?.id === item.id;
-                                const canAfford = stats[item.currency] >= item.cost;
+                            const isSelected = selectedItem?.id === item.id;
+                            const isHovered = hoveredItem?.id === item.id;
+                            const canAfford = stats[item.currency] >= item.cost;
 
                             return (
                                 <motion.div
                                     key={item.id}
                                     onClick={() => handleItemClick(item)}
+                                    onMouseEnter={() => { setHoveredItem(item); playSfx('hover'); }}
+                                    onMouseLeave={() => setHoveredItem(null)}
                                     className={`relative p-4 border-2 cursor-pointer transition-all group overflow-hidden ${
                                         isSelected 
                                             ? 'border-white bg-white text-black' 
-                                            : 'border-gray-700 bg-black/50 text-gray-400 hover:border-gray-500'
+                                            : isHovered 
+                                                ? 'border-phantom-red bg-black/80 text-white' 
+                                                : 'border-gray-700 bg-black/50 text-gray-400 hover:border-gray-500'
                                     }`}
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
@@ -257,6 +282,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-2">
                                             {item.type === 'THEME' && <Palette size={16} />}
+                                            {item.type === 'EFFECT' && <Sparkles size={16} />}
                                             <h3 className={`font-p5 text-xl ${isSelected ? 'text-black' : 'text-white'}`}>
                                                 {item.name}
                                             </h3>
@@ -265,7 +291,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                         {isOwned && !isEquipped && <Check size={16} className="text-green-500" />}
                                     </div>
                                     
-                                    <p className={`font-serif text-sm mb-4 leading-tight ${isSelected ? 'text-gray-800' : 'text-gray-500'}`}>
+                                    <p className={`font-serif text-sm mb-4 leading-tight ${isSelected ? 'text-gray-800' : 'text-gray-500'} ${isHovered ? 'text-gray-300' : ''}`}>
                                         {item.desc}
                                     </p>
 
@@ -273,7 +299,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                         <div className="flex justify-end">
                                             <div className={`flex items-center gap-2 px-3 py-1 font-mono text-xs border ${
                                                 canAfford 
-                                                    ? (isSelected ? 'border-black text-black' : 'border-gray-500 text-gray-300')
+                                                    ? (isSelected || isHovered ? 'border-black text-black bg-white' : 'border-gray-500 text-gray-300')
                                                     : 'border-red-900 text-red-700 bg-red-900/10'
                                             }`}>
                                                 {item.cost > 0 ? (
@@ -302,64 +328,60 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
 
                     {/* Action Bar */}
                     <div className="h-24 bg-black border-t-4 border-gray-700 p-4 flex items-center justify-between">
-                        {selectedItem ? (
+                        {activeDisplayItem ? (
                             <div className="flex items-center justify-between w-full">
                                 <div className="text-gray-400 font-mono text-xs">
-                                    <p>SELECTED: {selectedItem.name}</p>
-                                    <p>{inventory.includes(selectedItem.id) ? "STATUS: OWNED" : `STATUS: FOR SALE (${selectedItem.cost} ${selectedItem.currency.toUpperCase()})`}</p>
+                                    <p className="text-white text-lg font-p5 mb-1">{activeDisplayItem.name}</p>
+                                    <p>{activeDisplayItem.desc}</p>
+                                    {!inventory.includes(activeDisplayItem.id) && (
+                                        <p className="text-phantom-red mt-1">COST: {activeDisplayItem.cost} {activeDisplayItem.currency.toUpperCase()}</p>
+                                    )}
                                 </div>
 
-                                {inventory.includes(selectedItem.id) ? (
-                                    <button 
-                                        onClick={handleAction}
-                                        disabled={
-                                            (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
-                                            (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
-                                            (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
-                                            (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
-                                            (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
-                                        }
-                                        className={`px-8 py-3 font-p5 text-xl uppercase tracking-widest transition-all ${
-                                            (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
-                                            (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
-                                            (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
-                                            (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
-                                            (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
-                                                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                                                : 'bg-white text-black hover:bg-phantom-red hover:text-white'
-                                        }`}
-                                    >
-                                        {(selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
-                                         (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
-                                         (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
-                                         (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
-                                         (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
-                                            ? "EQUIPPED" : "EQUIP NOW"}
-                                    </button>
-                                ) : (
-                                    <button 
-                                        onClick={handleAction}
-                                        disabled={stats[selectedItem.currency] < selectedItem.cost}
-                                        className={`group relative px-8 py-3 font-p5 text-xl uppercase tracking-widest transition-all flex items-center gap-4 ${
-                                            stats[selectedItem.currency] < selectedItem.cost
-                                                ? 'bg-red-900/30 text-red-700 border-2 border-red-900 cursor-not-allowed'
-                                                : (confirming 
-                                                    ? 'bg-red-600 text-white animate-pulse border-2 border-red-500' 
-                                                    : 'bg-transparent text-white border-2 border-white hover:bg-white hover:text-black')
-                                        }`}
-                                    >
-                                        {confirming && <AlertTriangle size={20} />}
-                                        <span>
-                                            {stats[selectedItem.currency] < selectedItem.cost
-                                                ? "INSUFFICIENT STATS"
-                                                : (confirming ? "CONFIRM SACRIFICE?" : "TAKE DEAL")}
-                                        </span>
-                                    </button>
+                                {selectedItem && selectedItem.id === activeDisplayItem.id && ( // Only show button for selected item
+                                    inventory.includes(selectedItem.id) ? (
+                                        <button 
+                                            onClick={handleAction}
+                                            disabled={selectedItem.type === 'THEME' && equipped.theme === selectedItem.id}
+                                            className={`px-8 py-3 font-p5 text-xl uppercase tracking-widest transition-all flex items-center gap-2 ${
+                                                (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id)
+                                                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-white text-black hover:bg-phantom-red hover:text-white'
+                                            }`}
+                                        >
+                                            {(selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
+                                             (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
+                                             (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
+                                             (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
+                                             (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
+                                                ? (selectedItem.type === 'THEME' ? "EQUIPPED" : <>UNEQUIP <Trash2 size={16} /></>) 
+                                                : "EQUIP NOW"}
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={handleAction}
+                                            disabled={stats[selectedItem.currency] < selectedItem.cost}
+                                            className={`group relative px-8 py-3 font-p5 text-xl uppercase tracking-widest transition-all flex items-center gap-4 ${
+                                                stats[selectedItem.currency] < selectedItem.cost
+                                                    ? 'bg-red-900/30 text-red-700 border-2 border-red-900 cursor-not-allowed'
+                                                    : (confirming 
+                                                        ? 'bg-red-600 text-white animate-pulse border-2 border-red-500' 
+                                                        : 'bg-transparent text-white border-2 border-white hover:bg-white hover:text-black')
+                                            }`}
+                                        >
+                                            {confirming && <AlertTriangle size={20} />}
+                                            <span>
+                                                {stats[selectedItem.currency] < selectedItem.cost
+                                                    ? "INSUFFICIENT STATS"
+                                                    : (confirming ? "CONFIRM SACRIFICE?" : "TAKE DEAL")}
+                                            </span>
+                                        </button>
+                                    )
                                 )}
                             </div>
                         ) : (
                             <div className="w-full text-center text-gray-600 font-p5 tracking-widest">
-                                SELECT AN ITEM TO INSPECT
+                                HOVER TO INSPECT // CLICK TO SELECT
                             </div>
                         )}
                     </div>
