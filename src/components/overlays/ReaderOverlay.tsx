@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Document, Page } from 'react-pdf';
 import { 
@@ -11,7 +11,10 @@ import {
     MessageSquare, 
     Move,
     FileText,
-    Eye
+    Eye,
+    Columns,
+    GripVertical,
+    RefreshCw
 } from 'lucide-react';
 import type { Paper, PlaySoundFunction } from '../../types';
 import { NoteEditor } from '../shared/NoteEditor';
@@ -25,6 +28,16 @@ interface ReaderOverlayProps {
     onSaveNote: (content: string) => Promise<void>;
 }
 
+interface TranslationBlock {
+    src: string;
+    dst: string;
+}
+
+interface TranslationData {
+    blocks: TranslationBlock[];
+    status: 'pending' | 'loading' | 'success' | 'error';
+}
+
 export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }: ReaderOverlayProps) => {
     const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; x: number; y: number; text: string } | null>(null);
     const [analysisResult, setAnalysisResult] = useState<{ visible: boolean; type: string; content: string } | null>(null);
@@ -32,33 +45,210 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
     const [numPages, setNumPages] = useState<number>(0);
     const [showNotes, setShowNotes] = useState(false);
     const [safeMode, setSafeMode] = useState(false);
+    
+    // Split View & Translation State
+    const [splitMode, setSplitMode] = useState(false);
+    const [splitRatio, setSplitRatio] = useState(0.5);
+    const [activePage, setActivePage] = useState(1);
+    const [translations, setTranslations] = useState<Record<number, TranslationData>>({});
+    
+    // Highlight State
+    const [highlightedText, setHighlightedText] = useState<string | null>(null);
+    
+    // Refs
     const contentRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null); // Left Panel
+    const rightPanelRef = useRef<HTMLDivElement>(null); // Right Panel
+    const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+    const translationRefs = useRef<(HTMLDivElement | null)[]>([]);
+    const activeDriver = useRef<'left' | 'right' | null>(null);
 
     useEffect(() => { onLevelUp('guts'); }, []);
 
-    const handleMouseUp = () => {
-        const selection = window.getSelection();
-        if (!selection || selection.toString().trim().length === 0) return;
-        
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // 智能计算菜单位置，确保不超出屏幕
-        const menuWidth = 250;
-        const menuHeight = 60;
-        
-        // X坐标：确保左右都不超出
-        let x = rect.left + (rect.width / 2);
-        x = Math.max(menuWidth / 2 + 20, x);
-        x = Math.min(window.innerWidth - menuWidth / 2 - 20, x);
-        
-        // Y坐标：如果顶部空间不足，放到选中文本下方
-        let y = rect.top - 50;
-        if (y < menuHeight + 100) {  // 考虑顶栏高度
-            y = rect.bottom + 20;
+    // --- INTERSECTION OBSERVER ---
+    useEffect(() => {
+        if (!numPages || !splitMode) return;
+        const observer = new IntersectionObserver((entries) => {
+            const visibleEntry = entries.reduce((prev, current) => {
+                return (current.intersectionRatio > prev.intersectionRatio) ? current : prev;
+            });
+            if (visibleEntry.isIntersecting && visibleEntry.intersectionRatio > 0.05) {
+                const pageIndex = Number(visibleEntry.target.getAttribute('data-page-index'));
+                if (!isNaN(pageIndex)) setActivePage(pageIndex + 1);
+            }
+        }, { root: containerRef.current, threshold: [0.05, 0.5] });
+        pageRefs.current.forEach(el => { if (el) observer.observe(el); });
+        return () => observer.disconnect();
+    }, [numPages, splitMode]);
+
+    // --- EAGER TRANSLATION QUEUE ---
+    useEffect(() => {
+        if (!splitMode || numPages === 0) return;
+
+        // Check if we already started eager loading to avoid double execution
+        // We use a ref to track processed pages in this session
+        const processedPages = new Set<number>();
+        let isCancelled = false;
+
+        const processQueue = async () => {
+            const CONCURRENT_LIMIT = 3;
+            const pagesToLoad = Array.from({ length: numPages }, (_, i) => i + 1)
+                .filter(p => !translations[p] || translations[p].status === 'error');
+
+            // Helper to process a single page
+            const processPage = async (page: number) => {
+                if (isCancelled) return;
+                // Check status again just in case
+                if (translations[page]?.status === 'success' || translations[page]?.status === 'loading') return;
+                
+                await fetchPageTranslation(page);
+            };
+
+            // Simple chunked execution
+            for (let i = 0; i < pagesToLoad.length; i += CONCURRENT_LIMIT) {
+                if (isCancelled) break;
+                const chunk = pagesToLoad.slice(i, i + CONCURRENT_LIMIT);
+                await Promise.all(chunk.map(processPage));
+            }
+        };
+
+        // Start the queue
+        processQueue();
+
+        return () => { isCancelled = true; };
+    }, [splitMode, numPages]); // Only run when split mode opens or numPages loads
+
+    // --- SCROLL SYNC ---
+    const handleScroll = (source: 'left' | 'right') => {
+        if (!splitMode) return;
+        if (activeDriver.current && activeDriver.current !== source) return;
+
+        const sourceContainer = source === 'left' ? containerRef.current : rightPanelRef.current;
+        const targetContainer = source === 'left' ? rightPanelRef.current : containerRef.current;
+        const sourceItems = source === 'left' ? pageRefs.current : translationRefs.current;
+        const targetItems = source === 'left' ? translationRefs.current : pageRefs.current;
+
+        if (!sourceContainer || !targetContainer) return;
+
+        const scrollTop = sourceContainer.scrollTop;
+        let activeIndex = -1;
+        let progress = 0;
+
+        for (let i = 0; i < sourceItems.length; i++) {
+            const item = sourceItems[i];
+            if (!item) continue;
+            const itemTop = item.offsetTop;
+            const itemHeight = item.clientHeight;
+            if (scrollTop >= itemTop && scrollTop < itemTop + itemHeight) {
+                activeIndex = i;
+                progress = (scrollTop - itemTop) / itemHeight;
+                break;
+            }
         }
         
-        setSelectionMenu({ visible: true, x, y, text: selection.toString() });
+        if (activeIndex === -1 && sourceItems.length > 0) {
+            const lastItem = sourceItems[sourceItems.length - 1];
+            if (lastItem && scrollTop >= lastItem.offsetTop + lastItem.clientHeight) {
+                activeIndex = sourceItems.length - 1;
+                progress = 1;
+            } else if (sourceItems[0] && scrollTop < sourceItems[0].offsetTop) {
+                activeIndex = 0;
+                progress = 0;
+            }
+        }
+
+        if (activeIndex !== -1) {
+            const targetItem = targetItems[activeIndex];
+            if (targetItem) {
+                const targetScroll = targetItem.offsetTop + (targetItem.clientHeight * progress);
+                targetContainer.scrollTo({ top: targetScroll, behavior: 'auto' });
+            }
+        }
+    };
+
+    const fetchPageTranslation = async (page: number) => {
+        if (translations[page]?.status === 'loading') return;
+        setTranslations(prev => ({
+            ...prev,
+            [page]: { ...prev[page], blocks: prev[page]?.blocks || [], status: 'loading' }
+        }));
+        try {
+            const res = await fetch(`/api/papers/${paper.id}/translate_page`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ page })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTranslations(prev => ({
+                    ...prev,
+                    [page]: { ...data, status: 'success' }
+                }));
+            } else {
+                setTranslations(prev => ({
+                    ...prev,
+                    [page]: { blocks: [], status: 'error' }
+                }));
+            }
+        } catch (e) {
+            setTranslations(prev => ({
+                ...prev,
+                [page]: { blocks: [], status: 'error' }
+            }));
+        }
+    };
+
+    // --- SELECTION SYNC ---
+    const handleSelection = () => {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length > 0) {
+            setHighlightedText(selection.toString().trim());
+        }
+    };
+
+    // --- P5 LOADING STAR ---
+    const P5Star = () => (
+        <div className="relative w-16 h-16 animate-spin-slow">
+            <div className="absolute inset-0 bg-phantom-red clip-star" />
+            <div className="absolute inset-2 bg-black clip-star" />
+            <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-2 h-2 bg-white rotate-45 animate-pulse" />
+            </div>
+        </div>
+    );
+
+    // --- RESIZER ---
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = containerRef.current ? containerRef.current.parentElement?.offsetWidth || window.innerWidth : window.innerWidth;
+        const startRatio = splitRatio;
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            setSplitRatio(Math.min(Math.max(0.2, startRatio + (deltaX / startWidth)), 0.8));
+        };
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }, [splitRatio]);
+
+    // --- EXISTING ---
+    const handleMouseUp = () => {
+        handleSelection(); // Check for highlight
+        const selection = window.getSelection();
+        if (!selection || selection.toString().trim().length === 0) return;
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        // ... (Menu positioning logic)
+        setSelectionMenu({ 
+            visible: true, 
+            x: Math.min(window.innerWidth - 150, Math.max(10, rect.left + rect.width / 2)), 
+            y: rect.top - 50 < 60 ? rect.bottom + 10 : rect.top - 50, 
+            text: selection.toString() 
+        });
         playSfx('hover');
     };
 
@@ -80,29 +270,11 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
             setAnalysisResult({ visible: true, type, content: data.result });
             playSfx('confirm');
         } catch (e: any) {
-            console.error("Mind Hack Error:", e);
-            setTimeout(() => { 
-                setAnalysisResult({ 
-                    visible: true, 
-                    type, 
-                    content: `⚠️ SYSTEM ERROR // ${e.message || "Unknown Error"}\n\n请检查后端连接或 API Key 配置。` 
-                }); 
-            }, 1000);
+            setAnalysisResult({ visible: true, type, content: `Error: ${e.message}` });
         } finally {
             setLoadingAnalysis(false);
         }
     };
-
-    useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-             const target = e.target as HTMLElement;
-             if (selectionMenu?.visible && !target.closest('.phantom-menu')) {
-                 setSelectionMenu(null);
-             }
-        };
-        window.addEventListener('mousedown', handleClick);
-        return () => window.removeEventListener('mousedown', handleClick);
-    }, [selectionMenu]);
 
     return (
         <motion.div
@@ -114,210 +286,127 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote }
                 safeMode ? 'mode-safe bg-[#EAE8DC] text-[#222]' : 'bg-[#050505] text-white'
             }`}
         >
+            <style>{`
+                .clip-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+                .animate-spin-slow { animation: spin 4s linear infinite; }
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}</style>
+
+            {/* HEADER */}
             <div className={`h-20 flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-lg z-20 transition-colors duration-500 ${
                 safeMode ? 'bg-[#D4CFC0]' : 'bg-phantom-red'
             }`}>
                 <div className={`absolute inset-0 opacity-20 mix-blend-overlay ${safeMode ? '' : 'bg-halftone'}`} />
                 <div className="z-10 flex items-center space-x-4">
                     <Maximize2 className={safeMode ? 'text-[#4A4A4A]' : 'text-black'} />
-                    <h2 className={`font-p5 text-3xl truncate max-w-4xl transform -skew-x-12 ${
+                    <h2 className={`font-p5 text-3xl truncate max-w-xl transform -skew-x-12 ${
                         safeMode ? 'text-[#4A4A4A]' : 'text-black'
                     }`}>
                         READING // {paper.title}
                     </h2>
-                    {paper.ocrStatus === 'scanning' && (
-                        <div className="flex items-center space-x-2 bg-black/80 px-3 py-1 rounded-full">
-                            <Loader2 className="animate-spin text-phantom-yellow" size={14} />
-                            <span className="text-xs font-mono text-phantom-yellow">OCR SCANNING...</span>
-                        </div>
-                    )}
                 </div>
                 <div className="flex items-center space-x-4 z-10">
-                    <button 
-                        onClick={() => { setSafeMode(!safeMode); playSfx('click'); }}
-                        className={`px-4 py-2 font-p5 text-sm border-2 rounded-full transition-colors flex items-center space-x-2 ${
-                            safeMode 
-                                ? 'bg-[#4A4A4A] text-white border-[#4A4A4A] hover:bg-white hover:text-[#4A4A4A]' 
-                                : 'bg-white text-black border-white hover:bg-black hover:text-white'
-                        }`}
-                    >
-                        <Eye size={16} />
-                        <span>{safeMode ? 'HEIST MODE' : 'SAFE MODE'}</span>
+                    <button onClick={() => { setSplitMode(!splitMode); playSfx('click'); }} className={`px-4 py-2 font-p5 text-sm border-2 rounded-full flex items-center space-x-2 ${safeMode ? (splitMode ? 'bg-[#8C8C8C] text-white' : 'bg-white text-black border-[#4A4A4A]') : (splitMode ? 'bg-black text-phantom-yellow border-phantom-yellow' : 'bg-white text-black border-white hover:bg-black hover:text-white')}`}>
+                        <Languages size={16} /> <span>TRANSLATE</span>
                     </button>
-                    <button 
-                        onClick={() => { setShowNotes(!showNotes); playSfx('click'); }}
-                        className={`px-4 py-2 font-p5 text-sm border-2 rounded-full transition-colors flex items-center space-x-2 ${
-                            safeMode
-                                ? (showNotes ? 'bg-[#8C8C8C] text-white border-[#8C8C8C]' : 'bg-white text-[#4A4A4A] border-white hover:bg-[#8C8C8C] hover:text-white')
-                                : (showNotes ? 'bg-phantom-yellow text-black border-white' : 'bg-white text-black border-white hover:bg-phantom-yellow')
-                        }`}
-                    >
-                        <FileText size={16} />
-                        <span>NOTES</span>
+                    <button onClick={() => { setSafeMode(!safeMode); playSfx('click'); }} className={`px-4 py-2 font-p5 text-sm border-2 rounded-full flex items-center space-x-2 ${safeMode ? 'bg-[#4A4A4A] text-white border-[#4A4A4A]' : 'bg-white text-black border-white'}`}>
+                        <Eye size={16} /> <span>{safeMode ? 'HEIST' : 'SAFE'}</span>
                     </button>
-                    <button 
-                        onClick={() => { onClose(); onLevelUp('knowledge'); playSfx('rankup'); }} 
-                        className={`px-4 py-2 font-p5 text-sm border-2 rounded-full transition-colors ${
-                            safeMode 
-                                ? 'bg-[#4A4A4A] text-white border-white hover:bg-white hover:text-[#4A4A4A]' 
-                                : 'bg-black text-white border-white hover:bg-phantom-yellow hover:text-black'
-                        }`}
-                    >
-                        FINISH READING
-                    </button>
-                    <button 
-                        onClick={() => { onClose(); playSfx('cancel'); }} 
-                        className={`p-3 hover:rotate-90 transition-transform rounded-full shadow-lg border-2 ${
-                            safeMode 
-                                ? 'bg-[#4A4A4A] text-white border-white' 
-                                : 'bg-black text-white border-white'
-                        }`}
-                    >
-                        <X size={24} />
-                    </button>
+                    <button onClick={() => onClose()} className={`p-3 rounded-full border-2 ${safeMode ? 'bg-[#4A4A4A] text-white border-white' : 'bg-black text-white border-white'}`}><X size={24} /></button>
                 </div>
             </div>
 
-            <div className={`flex-1 relative overflow-auto flex justify-center p-8 custom-scrollbar transition-colors duration-500 ${
-                safeMode ? 'bg-[#F5F3ED]' : 'bg-zinc-900'
-            }`} onMouseUp={handleMouseUp}>
-                {paper.fileUrl ? (
-                    <div className={`shadow-2xl flex flex-col items-center pb-20 ${
-                        safeMode ? 'selection:bg-[#8C8C8C] selection:text-white' : 'selection:bg-phantom-red selection:text-black'
-                    }`}>
-                        <Document
-                            file={paper.fileUrl}
-                            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                            className="flex flex-col items-center gap-4"
-                        >
+            {/* CONTENT */}
+            <div className="flex-1 flex overflow-hidden relative w-full">
+                {/* LEFT PDF */}
+                <div 
+                    ref={containerRef}
+                    onMouseEnter={() => activeDriver.current = 'left'}
+                    onScroll={() => handleScroll('left')}
+                    style={{ width: splitMode ? `${splitRatio * 100}%` : '100%' }}
+                    className={`relative overflow-auto flex flex-col items-center p-8 custom-scrollbar transition-all duration-100 ${safeMode ? 'bg-[#F5F3ED]' : 'bg-zinc-900'}`} 
+                    onMouseUp={handleMouseUp}
+                >
+                    {paper.fileUrl && (
+                        <Document file={paper.fileUrl} onLoadSuccess={({ numPages }) => setNumPages(numPages)} className="flex flex-col items-center gap-4 w-full">
                             {Array.from(new Array(numPages), (_, index) => (
-                                <Page 
-                                    key={`page_${index + 1}`}
-                                    pageNumber={index + 1} 
-                                    renderTextLayer={true} 
-                                    renderAnnotationLayer={true}
-                                    scale={1.2}
-                                    className="bg-white shadow-xl"
-                                    loading={<PhantomLoader message="DECRYPTING" submessage="Extracting Cognitive Data..." />}
-                                />
+                                <div key={`page_${index + 1}`} data-page-index={index} ref={el => pageRefs.current[index] = el} className="relative w-full flex justify-center">
+                                    <Page pageNumber={index + 1} renderTextLayer={true} renderAnnotationLayer={true} width={splitMode ? (containerRef.current ? containerRef.current.offsetWidth * 0.9 : 500) : undefined} scale={splitMode ? undefined : 1.2} className="bg-white shadow-xl max-w-full" loading={<PhantomLoader message="DECRYPTING" />} />
+                                    <div className={`absolute -left-8 top-0 text-xs font-mono opacity-50 ${safeMode ? 'text-black' : 'text-white'}`}>{index + 1}</div>
+                                </div>
                             ))}
                         </Document>
-                    </div>
-                ) : (
-                    <div ref={contentRef} className={`max-w-4xl w-full p-12 min-h-full border-l-4 transition-colors duration-500 ${
-                        safeMode 
-                            ? 'bg-white/50 border-[#D4CFC0] selection:bg-[#8C8C8C] selection:text-white' 
-                            : 'bg-zinc-800/50 border-zinc-700 selection:bg-phantom-red selection:text-black'
-                    }`}>
-                        <div className={`font-serif text-xl leading-loose whitespace-pre-wrap ${
-                            safeMode ? 'text-[#222]' : 'text-zinc-300'
-                        }`}>
-                            {paper.content || (paper.ocrStatus === 'scanning' ? "SCANNING DOCUMENT FOR COGNITIVE DATA..." : "NO TEXT EXTRACTED.")}
-                        </div>
-                    </div>
-                )}
-                
-                <AnimatePresence>
-                    {selectionMenu && (
-                        <motion.div
-                            initial={{ scale: 0, opacity: 0, y: 10 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            style={{ top: selectionMenu.y, left: selectionMenu.x }}
-                            className="phantom-menu fixed transform -translate-x-1/2 -translate-y-full z-[150] flex space-x-2 pb-2 pointer-events-auto"
-                        >
-                             <button onClick={() => handleAction('DECIPHER')} className="bg-black text-white px-4 py-2 font-p5 text-sm border-2 border-phantom-red shadow-[4px_4px_0px_#E60012] hover:scale-110 transition-transform flex items-center space-x-2">
-                                <Sparkles size={14} className="text-phantom-yellow" /> <span>DECIPHER</span>
-                             </button>
-                             <button onClick={() => handleAction('TRANSLATE')} className="bg-white text-black px-4 py-2 font-p5 text-sm border-2 border-black shadow-[4px_4px_0px_#000] hover:scale-110 transition-transform flex items-center space-x-2">
-                                <Languages size={14} /> <span>TRANSLATE</span>
-                             </button>
-                             <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-phantom-red"></div>
-                        </motion.div>
                     )}
-                </AnimatePresence>
+                </div>
 
+                {splitMode && <div className="w-2 bg-black hover:bg-phantom-red cursor-col-resize flex items-center justify-center z-50 transition-colors" onMouseDown={handleMouseDown}><GripVertical size={16} className="text-white" /></div>}
+
+                {/* RIGHT TRANSLATION */}
                 <AnimatePresence>
-                    {analysisResult && (
-                        <motion.div
-                            drag
-                            dragMomentum={false}
-                            dragConstraints={{
-                                top: 80,
-                                left: 0,
-                                right: typeof window !== 'undefined' ? window.innerWidth - 400 : 800,
-                                bottom: typeof window !== 'undefined' ? window.innerHeight - 300 : 500
-                            }}
-                            dragElastic={0.1}
-                            initial={{ scale: 0.8, opacity: 0, y: 50 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.8, opacity: 0 }}
-                            className="fixed z-[200] top-1/3 left-1/2 -translate-x-1/2 w-[400px] max-w-[90vw] bg-white border-4 border-black shadow-[16px_16px_0px_rgba(0,0,0,0.8)] cursor-move"
+                    {splitMode && (
+                        <motion.div 
+                            initial={{ x: "100%", width: 0 }}
+                            animate={{ x: 0, width: `${(1 - splitRatio) * 100}%` }}
+                            exit={{ x: "100%", width: 0 }}
+                            className={`h-full border-l-4 border-black flex flex-col ${safeMode ? 'bg-white' : 'bg-zinc-900'}`}
                         >
-                            <div className="bg-black p-2 flex justify-between items-center cursor-grab active:cursor-grabbing">
-                                <div className="flex items-center space-x-2">
-                                    <Move size={16} className="text-phantom-red" />
-                                    <span className="text-white font-p5 text-sm tracking-widest">
-                                        {loadingAnalysis ? "ESTABLISHING LINK..." : "PHANTOM ANALYSIS"}
-                                    </span>
-                                </div>
-                                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => { setAnalysisResult(null); playSfx('cancel'); }} className="text-white hover:text-phantom-red">
-                                    <X size={20} />
-                                </button>
+                            <div className="bg-black text-white p-4 flex items-center justify-between shadow-lg z-10 shrink-0">
+                                <div className="flex items-center space-x-4"><Languages className="text-phantom-yellow" /><h3 className="font-p5 text-xl tracking-wider hidden lg:block">COGNITIVE TRANSLATION</h3></div>
+                                <span className="font-mono text-sm text-phantom-yellow animate-pulse">SYNC: PAGE {activePage}</span>
                             </div>
-                            <div className="p-6 bg-zinc-100 cursor-default" onPointerDown={(e) => e.stopPropagation()}>
-                                {loadingAnalysis ? (
-                                    <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                                        <BrainCircuit className="w-12 h-12 animate-spin text-phantom-red" />
-                                        <span className="font-mono text-xs animate-pulse text-gray-500">DECRYPTING COGNITION...</span>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div className="max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
-                                            <div className="font-sans text-sm text-black leading-relaxed whitespace-pre-wrap font-medium">
-                                                {analysisResult.content}
+
+                            <div ref={rightPanelRef} onMouseEnter={() => activeDriver.current = 'right'} onScroll={() => handleScroll('right')} className={`flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12 ${safeMode ? 'text-gray-800' : 'text-gray-200'}`}>
+                                {numPages > 0 ? (
+                                    Array.from(new Array(numPages), (_, index) => {
+                                        const pageNum = index + 1;
+                                        const data = translations[pageNum];
+                                        return (
+                                            <div key={`trans_page_${pageNum}`} ref={el => translationRefs.current[index] = el} className={`min-h-[50vh] transition-opacity duration-500 border-l-2 pl-4 ${activePage === pageNum ? 'border-phantom-red opacity-100' : 'border-transparent opacity-40 hover:opacity-80'}`}>
+                                                <div className="flex items-center space-x-4 mb-4 select-none"><span className={`font-p5 text-xl ${activePage === pageNum ? 'text-phantom-red' : 'text-gray-500'}`}>#{pageNum}</span></div>
+                                                
+                                                {data?.status === 'success' ? (
+                                                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                                                        {data.blocks.map((block, idx) => {
+                                                            const isHighlighted = highlightedText && block.src.includes(highlightedText);
+                                                            return (
+                                                                <div key={idx} className={`p-2 rounded transition-colors duration-300 ${isHighlighted ? 'bg-phantom-yellow text-black shadow-lg scale-[1.02]' : ''}`}>
+                                                                    <p className="font-serif text-lg leading-loose">{block.dst}</p>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : data?.status === 'loading' ? (
+                                                    <div className="flex flex-col items-center justify-center h-32 space-y-4">
+                                                        <P5Star />
+                                                        <p className="font-p5 tracking-widest text-sm animate-pulse">DECODING REALITY...</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-24 flex items-center justify-center border border-dashed border-gray-700 rounded-lg opacity-30"><span className="font-p5 text-xs tracking-widest">AWAITING COGNITIVE SYNC...</span></div>
+                                                )}
                                             </div>
-                                        </div>
-                                        <div className="border-t-2 border-zinc-300 pt-2 flex justify-between items-center">
-                                            <span className="text-[10px] uppercase font-bold text-phantom-red">CONFIDENCE: 99.8%</span>
-                                            <MessageSquare size={14} className="text-gray-400" />
-                                        </div>
-                                    </div>
-                                )}
+                                        );
+                                    })
+                                ) : <div className="h-full flex items-center justify-center"><BrainCircuit size={48} /></div>}
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
-
-            {/* Note Editor Overlay */}
+            
+            {/* OVERLAYS */}
             <AnimatePresence>
-                {showNotes && (
-                    <motion.div 
-                        initial={{ x: "100%" }} 
-                        animate={{ x: 0 }} 
-                        exit={{ x: "100%" }} 
-                        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-                        className="fixed right-0 top-0 w-[400px] max-w-[40vw] min-w-[300px] h-full bg-phantom-yellow border-l-4 border-black shadow-[-8px_0_16px_rgba(0,0,0,0.3)] z-[110]"
-                    >
-                        <div className="h-full flex flex-col">
-                            <div className="bg-black text-white p-4 flex items-center justify-between shrink-0">
-                                <h3 className="font-p5 text-xl tracking-wider">INTEL NOTES</h3>
-                                <button 
-                                    onClick={() => { setShowNotes(false); playSfx('cancel'); }}
-                                    className="hover:text-phantom-red hover:rotate-90 transition-transform"
-                                >
-                                    <X size={24} />
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                                <NoteEditor 
-                                    initialContent={paper.user_notes} 
-                                    paperId={paper.id} 
-                                    onSave={onSaveNote} 
-                                />
-                            </div>
-                        </div>
+                {selectionMenu && (
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} style={{ top: selectionMenu.y, left: selectionMenu.x }} className="phantom-menu fixed z-[150] flex space-x-2 pb-2">
+                        <button onClick={() => handleAction('DECIPHER')} className="bg-black text-white px-4 py-2 font-p5 text-sm border-2 border-phantom-red shadow-lg hover:scale-110 transition-transform">DECIPHER</button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            
+            <AnimatePresence>
+                {analysisResult && (
+                    <motion.div drag className="fixed z-[200] top-1/3 left-1/2 w-[400px] bg-white border-4 border-black shadow-xl">
+                        <div className="bg-black p-2 flex justify-between"><span className="text-white font-p5">ANALYSIS</span><X onClick={() => setAnalysisResult(null)} className="text-white cursor-pointer" /></div>
+                        <div className="p-6 bg-zinc-100 text-black whitespace-pre-wrap">{analysisResult.content}</div>
                     </motion.div>
                 )}
             </AnimatePresence>

@@ -22,7 +22,8 @@ import {
   Gem,
   Combine,
   Loader2,
-  BrainCircuit
+  BrainCircuit,
+  ShoppingBag
 } from 'lucide-react';
 
 import PhantomIM from './components/PhantomIM';
@@ -37,6 +38,7 @@ import {
   CallingCard
 } from './components';
 import { HackProgress } from './components/shared/HackProgress';
+import { ShopOverlay, ShopItem } from './components/overlays/ShopOverlay';
 import SystemMonitor from './components/SystemMonitor';
 import { UploadProgress } from './components/shared/UploadProgress';
 import LeftPane from './components/panes/LeftPane';
@@ -166,6 +168,11 @@ function App() {
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>(() => { const saved = localStorage.getItem('phantom_folders'); return saved ? JSON.parse(saved) : INITIAL_FOLDERS; });
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });
+  
+  // Shop State
+  const [inventory, setInventory] = useState<string[]>(() => { const saved = localStorage.getItem('phantom_inventory'); return saved ? JSON.parse(saved) : ['theme_default']; });
+  const [equipped, setEquipped] = useState<{theme: string}>(() => { const saved = localStorage.getItem('phantom_equipped'); return saved ? JSON.parse(saved) : { theme: 'theme_default' }; });
+  const [showShop, setShowShop] = useState(false);
 
   // Load Papers from Vault (Backend)
   useEffect(() => {
@@ -193,6 +200,8 @@ function App() {
 
   useEffect(() => { localStorage.setItem('phantom_folders', JSON.stringify(folders)); }, [folders]);
   useEffect(() => { localStorage.setItem('phantom_stats', JSON.stringify(stats)); }, [stats]);
+  useEffect(() => { localStorage.setItem('phantom_inventory', JSON.stringify(inventory)); }, [inventory]);
+  useEffect(() => { localStorage.setItem('phantom_equipped', JSON.stringify(equipped)); }, [equipped]);
 
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [activeMenu, setActiveMenu] = useState('all');
@@ -471,16 +480,72 @@ function App() {
   const handleRead = (paper?: Paper) => { const target = paper || selectedPaper; if (target) { setReadingPaper(target); setIsReading(true); playSfx('click'); } };
   const toggleFusionSelection = (id: number) => { if (fusionTargetIds.includes(id)) { setFusionTargetIds(prev => prev.filter(i => i !== id)); } else { if (fusionTargetIds.length < 2) { setFusionTargetIds(prev => [...prev, id]); } } playSfx('click'); };
 
+  // --- SHOP LOGIC ---
+  const handlePurchase = (item: ShopItem) => {
+      const cost = item.cost;
+      const currency = item.currency;
+      
+      // Safety Check
+      if (stats[currency] < cost) return;
+      
+      // Deduct Stats
+      setStats(prev => ({ ...prev, [currency]: prev[currency] - cost }));
+      
+      // Add to Inventory
+      setInventory(prev => [...prev, item.id]);
+  };
+
+  const handleEquip = (item: ShopItem) => {
+      if (item.type === 'THEME') {
+          setEquipped(prev => ({ ...prev, theme: item.id }));
+      }
+  };
+
   return (
-    <div className={`flex h-screen w-screen bg-phantom-black overflow-hidden font-sans relative bg-halftone bg-noise transition-colors duration-1000 ${uiMode === 'safe' ? 'mode-safe' : ''} text-[var(--color-text)]`}>
+    <div 
+        className={`flex h-screen w-screen bg-phantom-black overflow-hidden font-sans relative bg-halftone bg-noise transition-colors duration-1000 ${uiMode === 'safe' ? 'mode-safe' : ''} text-[var(--color-text)]`}
+        style={{
+            // Dynamic Theme Variables
+            '--phantom-red': equipped.theme === 'theme_royal' ? '#D4AF37' : 
+                             equipped.theme === 'theme_velvet' ? '#1a45a0' : 
+                             equipped.theme === 'theme_tv' ? '#FFE600' :
+                             equipped.theme === 'theme_hacker' ? '#00FF41' :
+                             '#E60012'
+        } as React.CSSProperties}
+    >
       <SystemMonitor /> {/* Add Monitor */}
       <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
       <HackProgress show={hackProgress.show} stage={hackProgress.stage} message={hackProgress.message} />
       <TransitionCurtain isActive={showCurtain} />
       <CallingCard show={showCallingCard === 'success'} onComplete={() => { setShowCallingCard(null); setActiveMenu('all'); }} />
       <RankUpNotification stat={showRankUp} />
+      
       {showStats && <StatsOverlay stats={stats} onClose={() => setShowStats(false)} playSfx={playSfx} />}
-      <LeftPane activeMenu={activeMenu} setActiveMenu={setActiveMenu} folders={folders} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onBulkImport={handleBulkImport} onShowStats={() => { setShowStats(true); playSfx('confirm'); }} onSyncConfig={handleSyncConfig} playSfx={playSfx} />
+      
+      {showShop && (
+          <ShopOverlay 
+              stats={stats} 
+              inventory={inventory} 
+              equipped={equipped}
+              onClose={() => setShowShop(false)} 
+              onPurchase={handlePurchase}
+              onEquip={handleEquip}
+              playSfx={playSfx} 
+          />
+      )}
+
+      <LeftPane 
+          activeMenu={activeMenu} 
+          setActiveMenu={setActiveMenu} 
+          folders={folders} 
+          onAddFolder={handleAddFolder} 
+          onDeleteFolder={handleDeleteFolder} 
+          onBulkImport={handleBulkImport} 
+          onShowStats={() => { setShowStats(true); playSfx('confirm'); }} 
+          onShowShop={() => { setShowShop(true); playSfx('confirm'); }}
+          onSyncConfig={handleSyncConfig} 
+          playSfx={playSfx} 
+      />
       <div className="flex-1 flex relative">
         <MiddlePane 
             activeMenu={activeMenu} 

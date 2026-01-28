@@ -7,6 +7,7 @@ export { RankUpNotification } from './notifications/RankUpNotification';
 export { CallingCard } from './notifications/CallingCard';
 export { TransitionCurtain, ShatterEffect } from './transitions';
 export { StatsOverlay } from './overlays/StatsOverlay';
+export { ShopOverlay } from './overlays/ShopOverlay';
 export { SubwayOverlay } from './overlays/SubwayOverlay';
 export { ReaderOverlay } from './overlays/ReaderOverlay';
 export { VelvetOverlay } from './overlays/VelvetOverlay';

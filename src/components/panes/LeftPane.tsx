@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { BookOpen, Plus, Gem, Tag, User, Upload, PlusCircle, BrainCircuit, X } from 'lucide-react';
+import { BookOpen, Plus, Gem, Tag, User, Upload, PlusCircle, BrainCircuit, X, ShoppingBag } from 'lucide-react';
 import type { Folder } from '../../types';
 
 interface LeftPaneProps {
@@ -10,11 +10,12 @@ interface LeftPaneProps {
     onDeleteFolder: (id: string, e: React.MouseEvent) => void;
     onBulkImport: (files: FileList) => void;
     onShowStats: () => void;
+    onShowShop: () => void;
     onSyncConfig: () => void; // Kept for backward compat but unused in UI
     playSfx: (type: any) => void;
 }
 
-const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onSyncConfig, playSfx }: LeftPaneProps) => {
+const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onShowShop, onSyncConfig, playSfx }: LeftPaneProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isVelvet = activeMenu === 'velvet';
   const systemItems = [{ icon: BookOpen, label: 'All References', id: 'all' }, { icon: Plus, label: 'Infiltrate (Add)', id: 'add' }, { icon: Gem, label: 'Velvet Room', id: 'velvet' }, { icon: Tag, label: 'Recent', id: 'recent' }];
@@ -34,6 +35,7 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
         
         <div className="space-y-2 mb-6">
             <button onClick={() => { onShowStats(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-white text-white p-2 hover:bg-white hover:text-black transition-colors w-full group"><User className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">PHANTOM STATS</span></button>
+            <button onClick={() => { onShowShop(); playSfx('click'); }} className="flex items-center space-x-2 bg-zinc-900 border-2 border-phantom-red text-phantom-red p-2 hover:bg-phantom-red hover:text-white transition-colors w-full group"><ShoppingBag className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">BLACK MARKET</span></button>
         </div>
 
         <nav className="space-y-4 z-10 mb-8">

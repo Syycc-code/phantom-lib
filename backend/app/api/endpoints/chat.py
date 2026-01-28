@@ -32,7 +32,11 @@ async def chat_stream(request: ChatRequest):
     async def generate():
         try:
             # 1. RAG
-            context_text, sources = retrieve_context(request.query)
+            if RAG_AVAILABLE:
+                context_text, sources = await asyncio.to_thread(retrieve_context, request.query)
+            else:
+                context_text, sources = "", []
+
             if not context_text: context_text = "No relevant internal documents found."
 
             # 2. Web Search

@@ -8,9 +8,9 @@ export default {
     extend: {
       colors: {
         phantom: {
-          red: '#E60012',
+          red: 'var(--phantom-red, #E60012)',
           black: '#111111',
-          yellow: '#FFE100',
+          yellow: 'var(--phantom-yellow, #FFE100)',
           'dark-grey': '#1A1A1A',
           white: '#E0E0E0',
         }

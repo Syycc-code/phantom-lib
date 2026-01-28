@@ -13,8 +13,70 @@ from app.models.paper import Paper, PaperRead
 from app.services.paper_processor import process_paper
 from app.services.url_parser import parse_url
 from app.api.endpoints.monitor import system_metrics
+import fitz
+from app.services.rag import deepseek_client
+from app.core.prompts import SYSTEM_PROMPTS
+from app.core.config import settings
 
 router = APIRouter()
+
+class TranslatePageRequest(BaseModel):
+    page: int
+
+import json
+
+@router.post("/papers/{paper_id}/translate_page")
+async def translate_paper_page(
+    paper_id: int, 
+    request: TranslatePageRequest,
+    session: Session = Depends(get_session)
+):
+    paper = session.get(Paper, paper_id)
+    if not paper or not paper.file_path or not os.path.exists(paper.file_path):
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    text = ""
+    try:
+        with fitz.open(paper.file_path) as doc:
+            if 0 <= request.page - 1 < len(doc):
+                page = doc[request.page - 1]
+                text = page.get_text()
+            else:
+                 raise HTTPException(status_code=400, detail="Page out of range")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF Error: {str(e)}")
+        
+    if not text.strip():
+        # Return empty block list for consistency
+        return {"blocks": [{"src": "", "dst": "⚠️ 此页面没有文本。"}]}
+        
+    try:
+        response = await deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPTS["MIND_HACK_TRANSLATE_JSON"]},
+                {"role": "user", "content": text}
+            ],
+            stream=False,
+            timeout=60.0
+        )
+        content = response.choices[0].message.content.strip()
+        
+        # Safe JSON parsing
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.endswith("```"):
+            content = content[:-3]
+        
+        try:
+            blocks = json.loads(content)
+        except json.JSONDecodeError:
+            # Fallback for malformed JSON
+            blocks = [{"src": text, "dst": content}]
+            
+        return {"blocks": blocks}
+    except Exception as e:
+        return {"blocks": [{"src": text, "dst": f"Translation Failed: {str(e)}"}]}
 
 
 class UrlUploadRequest(BaseModel):
