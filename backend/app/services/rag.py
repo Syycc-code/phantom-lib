@@ -20,28 +20,45 @@ except ImportError:
     knowledge_collection = None
     embedder = None
 
-if RAG_AVAILABLE:
+# Lazy Loading Globals
+_chroma_client = None
+_knowledge_collection = None
+_embedder = None
+_rag_initialized = False
+
+def get_rag_components():
+    global _chroma_client, _knowledge_collection, _embedder, _rag_initialized
+    
+    if _rag_initialized:
+        return _chroma_client, _knowledge_collection, _embedder
+
+    if not RAG_AVAILABLE:
+        return None, None, None
+
     try:
         # Use PersistentClient for data persistence
         persist_path = os.path.join(settings.UPLOAD_DIR, "chroma_db")
         os.makedirs(persist_path, exist_ok=True)
         
-        chroma_client = chromadb.PersistentClient(path=persist_path)
-        knowledge_collection = chroma_client.get_or_create_collection(name="phantom_knowledge")
+        print(f"[PHANTOM] Initializing RAG (Lazy)... Path: {persist_path}")
+        _chroma_client = chromadb.PersistentClient(path=persist_path)
+        _knowledge_collection = _chroma_client.get_or_create_collection(name="phantom_knowledge")
         
-        print(f"[PHANTOM] Loading Embedding Model... (DB Path: {persist_path})")
-        embedder = SentenceTransformer('all-MiniLM-L6-v2')
-        print("[PHANTOM] Embedding Model Ready.")
+        print(f"[PHANTOM] Loading Embedding Model...")
+        _embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        print("[PHANTOM] RAG Ready.")
+        
+        _rag_initialized = True
+        return _chroma_client, _knowledge_collection, _embedder
     except Exception as e:
         print(f"[PHANTOM] RAG Init Failed: {e}")
-        RAG_AVAILABLE = False
-        chroma_client = None
-        knowledge_collection = None
-        embedder = None
+        return None, None, None
 
 def index_document(text: str, filename: str):
-    if not RAG_AVAILABLE or not knowledge_collection or not embedder: return
+    client, collection, embedder = get_rag_components()
+    if not collection or not embedder: return
     
+    # ... (rest of function remains same, just use local vars)
     # Robust chunking with overlap
     chunk_size = 500
     overlap = 100
@@ -76,7 +93,7 @@ def index_document(text: str, filename: str):
     ids = [f"{filename}_{uuid.uuid4()}" for _ in chunks]
     metadatas = [{"source": filename} for _ in chunks]
     
-    knowledge_collection.add(
+    collection.add(
         documents=chunks,
         embeddings=embeddings,
         metadatas=metadatas,
@@ -85,12 +102,13 @@ def index_document(text: str, filename: str):
     print(f"[MEMORY] Indexed {len(chunks)} fragments from {filename}")
 
 def retrieve_context(query: str, n_results=2):
-    if not RAG_AVAILABLE or not knowledge_collection or not embedder:
+    client, collection, embedder = get_rag_components()
+    if not collection or not embedder:
         return "", []
     
     try:
         q_vec = embedder.encode([query]).tolist()
-        results = knowledge_collection.query(query_embeddings=q_vec, n_results=n_results)
+        results = collection.query(query_embeddings=q_vec, n_results=n_results)
         
         context_text = ""
         sources = set()

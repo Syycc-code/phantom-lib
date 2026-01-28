@@ -18,8 +18,9 @@ class Settings:
     VERSION: str = "2.1.0"
     API_V1_STR: str = "/api"
     
-    # Database
-    DB_FILE: str = "phantom_database.db"
+    # Database (Absolute Path Fix)
+    BASE_DIR: str = str(Path(__file__).resolve().parent.parent.parent)
+    DB_FILE: str = os.path.join(BASE_DIR, "phantom_database.db")
     SQLITE_URL: str = f"sqlite:///{DB_FILE}"
     
     # AI Config

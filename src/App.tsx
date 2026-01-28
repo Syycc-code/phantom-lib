@@ -191,27 +191,16 @@ function App() {
 
   // Load Papers from Vault (Backend)
   useEffect(() => {
-      const loadPapers = async () => {
-          try {
-              const res = await fetch('/api/papers');
-              if (res.ok) {
-                  const data = await res.json();
-                  // Map backend model to frontend Paper type
-                  const mappedPapers = data.map((p: any) => ({
-                      ...p,
-                      type: "PDF",
-                      tags: ["Stored"],
-                      content: p.abstract, // Use abstract as content preview
-                      fileUrl: `/api/papers/${p.id}/pdf`
-                  }));
-                  setPapers(mappedPapers);
-              }
-          } catch (e) {
-              console.error("Failed to connect to Vault:", e);
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Tab') {
+              e.preventDefault();
+              setShowMindPalace(prev => !prev);
+              playSfx('confirm');
           }
       };
-      loadPapers();
-  }, []);
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playSfx]); // Added dependency
 
   useEffect(() => { localStorage.setItem('phantom_folders', JSON.stringify(folders)); }, [folders]);
   useEffect(() => { localStorage.setItem('phantom_stats', JSON.stringify(stats)); }, [stats]);
@@ -605,6 +594,7 @@ function App() {
           onBulkImport={handleBulkImport} 
           onShowStats={() => { setShowStats(true); playSfx('confirm'); }} 
           onShowShop={() => { setShowShop(true); playSfx('confirm'); }}
+          onShowMindPalace={() => { setShowMindPalace(true); playSfx('impact'); }}
           onSyncConfig={handleSyncConfig} 
           playSfx={playSfx} 
       />
