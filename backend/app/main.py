@@ -12,7 +12,16 @@ from app.api.deps import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Init DB
+    print(f"[DB] Initializing database at: {settings.SQLITE_URL}")
     SQLModel.metadata.create_all(engine)
+    
+    # Check Count
+    from sqlmodel import Session, select
+    from app.models.paper import Paper
+    with Session(engine) as session:
+        count = session.exec(select(Paper)).all()
+        print(f"[DB] Current Paper Count: {len(count)}")
+
     # Ensure Uploads
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     

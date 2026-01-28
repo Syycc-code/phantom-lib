@@ -17,10 +17,10 @@ def check_and_fix():
         cursor = conn.cursor()
         cursor.execute("SELECT count(*) FROM paper")
         count = cursor.fetchone()[0]
-        print(f"✅ Database integrity check passed. Found {count} papers.")
+        print(f"[OK] Database integrity check passed. Found {count} papers.")
         conn.close()
     except Exception as e:
-        print(f"❌ Database corrupted or schema mismatch: {e}")
+        print(f"[ERR] Database corrupted or schema mismatch: {e}")
         print("Attempting to backup and reset...")
         conn.close()
         

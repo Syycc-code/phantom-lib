@@ -62,14 +62,25 @@ async def process_paper(
     session.commit()
     session.refresh(new_paper)
     
-    # 4. 触发后台任务（添加安全检查）
-    asyncio.create_task(asyncio.to_thread(index_document, preview_text, filename))
-    
-    # 只在有ID和abstract时触发分析
-    if new_paper.id and new_paper.abstract:
-        asyncio.create_task(_run_analysis(new_paper.id, new_paper.abstract, session.bind))
+    try:
+        # 4. 触发后台任务（添加安全检查）
+        # 将同步的 index_document 放入线程池，避免阻塞
+        asyncio.create_task(asyncio.to_thread(_safe_index_document, preview_text, filename))
+        
+        # 只在有ID和abstract时触发分析
+        if new_paper.id and new_paper.abstract:
+            asyncio.create_task(_run_analysis(new_paper.id, new_paper.abstract, session.bind))
+    except Exception as e:
+        print(f"[PROCESS ERROR] Background tasks failed: {e}")
     
     return new_paper
+
+def _safe_index_document(text: str, filename: str):
+    """Wrapper to prevent RAG crashes from killing the app"""
+    try:
+        index_document(text, filename)
+    except Exception as e:
+        print(f"[RAG INDEX ERROR] Failed to index {filename}: {e}")
 
 
 async def _run_analysis(paper_id: int, abstract: str, engine):

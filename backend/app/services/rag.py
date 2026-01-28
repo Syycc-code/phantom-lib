@@ -11,9 +11,10 @@ deepseek_client = AsyncOpenAI(
 )
 
 try:
-    import chromadb
-    from sentence_transformers import SentenceTransformer
-    RAG_AVAILABLE = True
+    # FORCE DISABLE RAG FOR DEBUGGING
+    # import chromadb
+    # from sentence_transformers import SentenceTransformer
+    RAG_AVAILABLE = False
 except ImportError:
     RAG_AVAILABLE = False
     chroma_client = None

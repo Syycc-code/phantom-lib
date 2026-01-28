@@ -156,9 +156,11 @@ async def upload_paper(
         print(f"[FILE_UPLOAD_ERROR] {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/papers", response_model=List[PaperRead])
+@router.get("/papers")
 async def get_papers(session: Session = Depends(get_session)):
-    return session.exec(select(Paper).order_by(desc(Paper.created_at))).all()
+    # Return raw objects to debug validation errors
+    papers = session.exec(select(Paper).order_by(desc(Paper.created_at))).all()
+    return papers
 
 @router.get("/papers/{paper_id}/pdf")
 async def get_paper_pdf(paper_id: int, session: Session = Depends(get_session)):

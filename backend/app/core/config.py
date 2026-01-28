@@ -38,10 +38,10 @@ settings = Settings()
 
 # Log API Key Status
 if settings.DEEPSEEK_API_KEY == "mock-key":
-    print("[CONFIG] ⚠️  WARNING: Using 'mock-key'. AI features will be disabled.")
+    print("[CONFIG] [WARN] Using 'mock-key'. AI features will be disabled.")
 else:
     masked_key = f"{settings.DEEPSEEK_API_KEY[:5]}...{settings.DEEPSEEK_API_KEY[-3:]}"
-    print(f"[CONFIG] ✅ DeepSeek API Key loaded: {masked_key}")
+    print(f"[CONFIG] [OK] DeepSeek API Key loaded: {masked_key}")
 
 # Apply Global Envs
 os.environ["HF_ENDPOINT"] = settings.HF_ENDPOINT
