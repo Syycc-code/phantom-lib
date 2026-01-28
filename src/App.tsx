@@ -30,6 +30,7 @@ import PhantomIM from './components/PhantomIM';
 import { 
   SubwayOverlay, 
   ReaderOverlay, 
+  MindPalace,
   VelvetOverlay, 
   FusionWorkspace,
   RankUpNotification,
@@ -50,14 +51,18 @@ import { INITIAL_FOLDERS, INITIAL_PAPERS } from './constants';
 // Backward compatibility alias
 type FolderType = Folder;
 
-// --- PDF WORKER SETUP ---
+// --- PDF WORKER SETUP (LOCAL) ---
+// Use Vite's explicit URL import to bundle the worker locally
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
 try {
-    pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 } catch (e) {
     console.error("PDF Worker Init Failed", e);
 }
 
 // --- AUDIO ENGINE (SYNTHESIZER) ---
+// Extracted to hook for better performance isolation
 const useAudioSystem = () => {
     const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -70,7 +75,8 @@ const useAudioSystem = () => {
         }
     }, []);
 
-    const playSound = useCallback((type: 'click' | 'hover' | 'confirm' | 'cancel' | 'impact' | 'rankup') => {
+    // Memoize the play function
+    return useCallback((type: 'click' | 'hover' | 'confirm' | 'cancel' | 'impact' | 'rankup') => {
         initAudio();
         const ctx = audioCtxRef.current;
         if (!ctx) return;
@@ -82,9 +88,9 @@ const useAudioSystem = () => {
 
         const now = ctx.currentTime;
 
+        // Sound definitions kept inline for now to avoid external dependency complexity in this refactor step
         switch (type) {
             case 'click':
-                // Sharp mechanical click
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(800, now);
                 osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
@@ -94,7 +100,6 @@ const useAudioSystem = () => {
                 osc.stop(now + 0.05);
                 break;
             case 'hover':
-                // Subtle high tick
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(1200, now);
                 gain.gain.setValueAtTime(0.02, now);
@@ -103,7 +108,6 @@ const useAudioSystem = () => {
                 osc.stop(now + 0.03);
                 break;
             case 'confirm':
-                // "Schwing" - High pitch slide
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(400, now);
                 osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
@@ -113,7 +117,6 @@ const useAudioSystem = () => {
                 osc.stop(now + 0.2);
                 break;
             case 'cancel':
-                // Low thud
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(200, now);
                 osc.frequency.linearRampToValueAtTime(50, now + 0.1);
@@ -123,7 +126,6 @@ const useAudioSystem = () => {
                 osc.stop(now + 0.15);
                 break;
             case 'impact':
-                // Heavy Crash
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(100, now);
                 osc.frequency.exponentialRampToValueAtTime(10, now + 0.5);
@@ -133,7 +135,6 @@ const useAudioSystem = () => {
                 osc.stop(now + 0.5);
                 break;
             case 'rankup':
-                // Jingle (Arpeggio)
                 const playNote = (freq: number, time: number) => {
                     const o = ctx.createOscillator();
                     const g = ctx.createGain();
@@ -146,15 +147,13 @@ const useAudioSystem = () => {
                     o.start(time);
                     o.stop(time + 0.3);
                 };
-                playNote(523.25, now); // C
-                playNote(659.25, now + 0.1); // E
-                playNote(783.99, now + 0.2); // G
-                playNote(1046.50, now + 0.3); // C (High)
+                playNote(523.25, now);
+                playNote(659.25, now + 0.1);
+                playNote(783.99, now + 0.2);
+                playNote(1046.50, now + 0.3);
                 break;
         }
     }, [initAudio]);
-
-    return playSound;
 };
 
 const INITIAL_STATS: PhantomStats = {
@@ -169,6 +168,9 @@ const INITIAL_STATS: PhantomStats = {
 
 // --- Main App ---
 function App() {
+  // INIT AUDIO (MUST BE FIRST)
+  const playSfx = useAudioSystem();
+
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>(() => { const saved = localStorage.getItem('phantom_folders'); return saved ? JSON.parse(saved) : INITIAL_FOLDERS; });
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });
@@ -220,7 +222,7 @@ function App() {
   const [activeMenu, setActiveMenu] = useState('all');
   const [isReading, setIsReading] = useState(false);
   const [readingPaper, setReadingPaper] = useState<Paper | null>(null);
-  const [showSubway, setShowSubway] = useState(false);
+  const [showMindPalace, setShowMindPalace] = useState(false);
   
   const [fusionTargetIds, setFusionTargetIds] = useState<number[]>([]);
   const [isFusing, setIsFusing] = useState(false);
@@ -238,44 +240,69 @@ function App() {
       setUiMode(isReading ? 'safe' : 'heist');
   }, [isReading]);
 
-  // INIT AUDIO
-  const playSfx = useAudioSystem();
+  // --- HANDLERS (MEMOIZED) ---
+  const handleSelectPaper = useCallback((p: Paper) => {
+      setSelectedPaper(p);
+      playSfx('click');
+  }, [playSfx]);
 
-  const handleLevelUp = (statName: keyof PhantomStats) => {
+  const handleLevelUp = useCallback((statName: keyof PhantomStats) => {
       setStats(prev => ({ ...prev, [statName]: Math.min(10, prev[statName] + 1) }));
       setShowRankUp(statName);
       playSfx('rankup');
       setTimeout(() => setShowRankUp(null), 3000);
-  };
+  }, [playSfx]);
 
-  useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === 'Tab') {
-              e.preventDefault();
-              setShowSubway(prev => !prev);
-              playSfx('confirm');
-          }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const handleRead = useCallback((paper?: Paper) => { 
+      const target = paper || selectedPaper; 
+      if (target) { 
+          setReadingPaper(target); 
+          setIsReading(true); 
+          playSfx('click'); 
+      } 
+  }, [selectedPaper, playSfx]);
 
-  // NEW: Upload to Vault
-  const handleBulkImport = async (files: FileList) => { 
+  const handleAddFolder = useCallback(() => { 
+      const name = window.prompt("ENTER MISSION NAME:"); 
+      if (name) { 
+          setFolders(prev => [...prev, { id: Date.now().toString(), name }]); 
+          handleLevelUp('kindness'); 
+          playSfx('confirm'); 
+      } 
+  }, [handleLevelUp, playSfx]);
+
+  const handleDeleteFolder = useCallback((id: string, e: React.MouseEvent) => { 
+      e.stopPropagation(); 
+      if (window.confirm("BURN EVIDENCE?")) { 
+          setFolders(prev => prev.filter(f => f.id !== id)); 
+          if (activeMenu === `folder_${id}`) setActiveMenu('all'); 
+          playSfx('impact'); 
+      } 
+  }, [activeMenu, playSfx]);
+
+  const toggleFusionSelection = useCallback((id: number) => { 
+      setFusionTargetIds(prev => {
+          if (prev.includes(id)) return prev.filter(i => i !== id);
+          if (prev.length < 2) return [...prev, id];
+          return prev;
+      }); 
+      playSfx('click'); 
+  }, [playSfx]);
+
+  // ... (Other handlers remain same but we must update their usage)
+
+  // NEW: Upload to Vault (Optimized)
+  const handleBulkImport = useCallback(async (files: FileList) => { 
       playSfx('confirm');
       setUploadStatus({ active: true, current: 0, total: files.length });
-      
-      const newPapers: Paper[] = [];
       
       for (let i = 0; i < files.length; i++) {
           const file = files[i];
           if (file.type !== 'application/pdf') continue;
 
-          // Optimistic UI update (optional, but let's wait for server for ID)
           try {
               const formData = new FormData();
               formData.append('file', file);
-              
               const res = await fetch('/api/upload', { method: 'POST', body: formData });
               if (res.ok) {
                   const p = await res.json();
@@ -287,7 +314,9 @@ function App() {
                       fileUrl: `/api/papers/${p.id}/pdf`
                   };
                   setPapers(prev => [mappedPaper, ...prev]);
-                  handleLevelUp('proficiency');
+                  // handleLevelUp cannot be called here if it's not a dependency, 
+                  // but we can just update stats directly or add dependency
+                  setStats(prev => ({ ...prev, proficiency: Math.min(10, prev.proficiency + 1) }));
               }
           } catch (e) {
               console.error("Upload failed:", e);
@@ -296,9 +325,11 @@ function App() {
       }
       setTimeout(() => {
           setUploadStatus({ active: false, current: 0, total: 0 });
-          setActiveMenu('all'); // Correctly switch view after delay
+          setActiveMenu('all'); 
       }, 2000);
-  };
+  }, [playSfx]); // Removed handleLevelUp to avoid circular dependency chain
+
+  // ... (Update MiddlePane usage)
 
   const handleAddPaper = async (url: string) => { 
       playSfx('confirm');
@@ -488,11 +519,6 @@ function App() {
       }
   };
 
-  const handleAddFolder = () => { const name = window.prompt("ENTER MISSION NAME:"); if (name) { setFolders(prev => [...prev, { id: Date.now().toString(), name }]); handleLevelUp('kindness'); playSfx('confirm'); } };
-  const handleDeleteFolder = (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (window.confirm("BURN EVIDENCE?")) { setFolders(prev => prev.filter(f => f.id !== id)); if (activeMenu === `folder_${id}`) setActiveMenu('all'); playSfx('impact'); } };
-  const handleRead = (paper?: Paper) => { const target = paper || selectedPaper; if (target) { setReadingPaper(target); setIsReading(true); playSfx('click'); } };
-  const toggleFusionSelection = (id: number) => { if (fusionTargetIds.includes(id)) { setFusionTargetIds(prev => prev.filter(i => i !== id)); } else { if (fusionTargetIds.length < 2) { setFusionTargetIds(prev => [...prev, id]); } } playSfx('click'); };
-
   // --- SHOP LOGIC ---
   const handlePurchase = (item: ShopItem) => {
       const cost = item.cost;
@@ -587,7 +613,7 @@ function App() {
             activeMenu={activeMenu} 
             papers={papers} 
             selectedId={selectedPaper?.id || null} 
-            onSelect={(p: any) => { setSelectedPaper(p); playSfx('click'); }} 
+            onSelect={handleSelectPaper} 
             onAddPaper={handleAddPaper} 
             onDeletePaper={handleDeletePaper} 
             onBulkImport={handleBulkImport}
@@ -616,7 +642,7 @@ function App() {
       </div>
       <AnimatePresence>
         {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} />}
-        {showSubway && <SubwayOverlay papers={papers} folders={folders} onClose={() => setShowSubway(false)} onRead={handleRead} playSfx={playSfx} />}
+        {showMindPalace && <MindPalace papers={papers} onClose={() => setShowMindPalace(false)} onRead={handleRead} playSfx={playSfx} />}
         {fusionResult && fusionTargetIds.length === 2 && (
             <FusionWorkspace 
                 paperA={papers.find(p => p.id === fusionTargetIds[0])!} 

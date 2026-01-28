@@ -291,6 +291,25 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                 .clip-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
                 .animate-spin-slow { animation: spin 4s linear infinite; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                
+                /* DYNAMIC SELECTION STYLES */
+                ${markerStyle === 'neon' ? `
+                    ::selection {
+                        background: #00ff00;
+                        color: black;
+                        text-shadow: 0 0 5px #00ff00;
+                    }
+                ` : markerStyle === 'redact' ? `
+                    ::selection {
+                        background: #000;
+                        color: transparent;
+                    }
+                ` : `
+                    ::selection {
+                        background: #E60012; /* Phantom Red Default */
+                        color: white;
+                    }
+                `}
             `}</style>
 
             {/* HEADER */}
@@ -382,23 +401,23 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                                                             const isHighlighted = highlightedText && block.src.includes(highlightedText);
                                                             
                                                             // MARKER EFFECTS
-                                                            let effectClass = "p-2 rounded transition-colors duration-300 ";
+                                                            let effectClass = "p-2 rounded transition-all duration-300 ";
                                                             if (isHighlighted) {
                                                                 if (markerStyle === 'neon') {
-                                                                    effectClass += "bg-black text-green-400 shadow-[0_0_15px_#00ff00] border border-green-500 font-mono scale-[1.05]";
+                                                                    effectClass += "bg-black text-green-400 shadow-[0_0_15px_#00ff00] border border-green-500 font-mono scale-[1.05] z-10 relative";
                                                                 } else if (markerStyle === 'redact') {
-                                                                    effectClass += "bg-black text-black hover:text-white transition-all duration-500 cursor-help border border-black";
+                                                                    effectClass += "bg-black text-transparent hover:text-white cursor-help border border-black select-none";
                                                                 } else {
-                                                                    effectClass += "bg-phantom-yellow text-black shadow-lg scale-[1.02]";
+                                                                    effectClass += "bg-phantom-yellow text-black shadow-lg scale-[1.02] z-10 relative";
                                                                 }
+                                                            } else {
+                                                                effectClass += "hover:bg-white/5";
                                                             }
 
                                                             return (
                                                                 <div key={idx} className={effectClass}>
                                                                     <p className="font-serif text-lg leading-loose">
-                                                                        {markerStyle === 'redact' && isHighlighted ? "████████████" : block.dst}
-                                                                        {/* Redact Hack: Show blocks, but hover reveals text via CSS color change. Above text is mock visual, actual text is there. */}
-                                                                        {/* Better Redact: Just use CSS text-transparent */}
+                                                                        {block.dst}
                                                                     </p>
                                                                 </div>
                                                             );
@@ -422,11 +441,24 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                 </AnimatePresence>
             </div>
             
-            {/* OVERLAYS */}
+            {/* OVERLAYS - Fixed Z-Index and Positioning */}
             <AnimatePresence>
                 {selectionMenu && (
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} style={{ top: selectionMenu.y, left: selectionMenu.x }} className="phantom-menu fixed z-[150] flex space-x-2 pb-2">
-                        <button onClick={() => handleAction('DECIPHER')} className="bg-black text-white px-4 py-2 font-p5 text-sm border-2 border-phantom-red shadow-lg hover:scale-110 transition-transform">DECIPHER</button>
+                    <motion.div 
+                        initial={{ scale: 0, opacity: 0 }} 
+                        animate={{ scale: 1, opacity: 1 }} 
+                        exit={{ scale: 0, opacity: 0 }} 
+                        style={{ top: selectionMenu.y, left: selectionMenu.x }} 
+                        className="fixed z-[9999] flex space-x-2 pb-2 pointer-events-auto"
+                    >
+                        <div className="phantom-menu flex space-x-2"> {/* Wrapper for click detection */}
+                            <button onClick={() => handleAction('DECIPHER')} className="bg-black text-white px-4 py-2 font-p5 text-sm border-2 border-phantom-red shadow-lg hover:scale-110 transition-transform flex items-center gap-2">
+                                <Sparkles size={14} /> DECIPHER
+                            </button>
+                            <button onClick={() => handleAction('TRANSLATE')} className="bg-white text-black px-4 py-2 font-p5 text-sm border-2 border-black shadow-lg hover:scale-110 transition-transform flex items-center gap-2">
+                                <Languages size={14} /> TRANSLATE
+                            </button>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

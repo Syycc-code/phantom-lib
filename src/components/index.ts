@@ -10,5 +10,6 @@ export { StatsOverlay } from './overlays/StatsOverlay';
 export { ShopOverlay } from './overlays/ShopOverlay';
 export { SubwayOverlay } from './overlays/SubwayOverlay';
 export { ReaderOverlay } from './overlays/ReaderOverlay';
+export { MindPalace } from './overlays/MindPalace';
 export { VelvetOverlay } from './overlays/VelvetOverlay';
 export { FusionWorkspace } from './overlays/FusionWorkspace';

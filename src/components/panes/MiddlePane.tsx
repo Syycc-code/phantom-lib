@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Combine, Star, Gem, Upload } from 'lucide-react';
 
 interface MiddlePaneProps {
     activeMenu: string;
-    papers: any[]; // Todo: Fix type
+    papers: any[]; 
     selectedId: number | null;
     onSelect: (paper: any) => void;
     onAddPaper: (url: string) => void;
@@ -19,75 +19,19 @@ interface MiddlePaneProps {
     fusionResult: string | null;
     showCurtain: boolean;
     setShowCurtain: (v: boolean) => void;
-    onLevelUp: (stat: string) => void;
+    onLevelUp: (stat: any) => void;
     playSfx: (type: any) => void;
 }
 
-const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onBulkImport, onBulkDelete, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx }: MiddlePaneProps) => {
-    const [inputUrl, setInputUrl] = useState('');
-    const [isStealing, setIsStealing] = useState(false);
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    
-    const isVelvet = activeMenu === 'velvet';
-    
-    const filteredPapers = papers.filter((p: any) => { 
-        if (activeMenu === 'all' || activeMenu === 'velvet') return true; 
-        if (activeMenu === 'recent') return true; // Todo: filter recent
-        if (activeMenu.startsWith('folder_')) return p.folderId === activeMenu.split('folder_')[1]; 
-        return false; 
-    });
-
-    const handleSteal = async (e: React.FormEvent) => { 
-        e.preventDefault(); 
-        if (!inputUrl.trim()) return;
-        
-        setIsStealing(true); 
-        playSfx('confirm'); 
-        
-        try {
-            await onAddPaper(inputUrl); 
-            setInputUrl(''); 
-        } catch (error) {
-            console.error('Steal failed:', error);
-            playSfx('cancel');
-        } finally {
-            setIsStealing(false); 
-        }
-    };
-
-    const toggleSelection = (id: number) => { 
-        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); 
-        playSfx('click'); 
-    };
-
-    const executeBulkDelete = () => { 
-        if (window.confirm(`BURN ${selectedIds.length} INTEL ITEMS?`)) { 
-            onBulkDelete(selectedIds); 
-            setSelectedIds([]); 
-            setIsSelectionMode(false); 
-            playSfx('impact'); 
-        } 
-    };
-
-    const startFusion = () => { 
-        setShowCurtain(true); 
-        setTimeout(() => { 
-            setIsFusing(true); 
-            setFusionResult("The twins are converging... Ask me anything about their connection.");
-            setShowCurtain(false); 
-        }, 600); 
-        playSfx('confirm'); 
-    };
-
-    // JUICY INTERACTION VARIANTS
+// Memoized Paper Row Component to prevent unnecessary re-renders
+const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, toggleFusionSelection, toggleSelection, isVelvet }: any) => {
     const cardVariants = {
         hidden: { opacity: 0, x: -50, rotateX: 90 },
         visible: (i: number) => ({ 
             opacity: 1, 
             x: 0, 
             rotateX: 0,
-            transition: { delay: i * 0.05, type: "spring" }
+            transition: { delay: Math.min(i * 0.05, 0.5), type: "spring", stiffness: 100 } // Limit delay
         }),
         hover: { 
             scale: 1.02, 
@@ -110,9 +54,122 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
         }
     };
 
+    const handleClick = useCallback(() => {
+        if (isVelvet) {
+            toggleFusionSelection(paper.id);
+        } else if (isSelectionMode) {
+            toggleSelection(paper.id);
+        } else {
+            onSelect(paper);
+        }
+    }, [isVelvet, isSelectionMode, paper, toggleFusionSelection, toggleSelection, onSelect]);
+
+    return (
+        <motion.div 
+            layoutId={`paper-${paper.id}`} // Keeps layout stable
+            custom={index}
+            variants={cardVariants}
+            initial="hidden"
+            animate={isSelected ? "selected" : "visible"}
+            whileHover="hover"
+            whileTap="tap"
+            onClick={handleClick}
+            className={`relative p-5 cursor-pointer group transition-colors duration-100 transform border-2 border-transparent ${
+                isSelected ? '' : 'bg-zinc-900 border-zinc-700 text-gray-300'
+            }`}
+            style={{ 
+                clipPath: "polygon(0 0, 98% 0, 100% 5%, 100% 95%, 95% 100%, 2% 98%, 0 90%, 3% 10%)",
+                willChange: "transform, opacity" // Hardware acceleration
+            }}
+        >
+            {/* DECORATIVE SPIKE ON HOVER */}
+            <div className="absolute -left-10 top-0 bottom-0 w-8 bg-black transform skew-x-12 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
+            
+            <div className="flex justify-between items-start relative z-10">
+                <div>
+                    <h3 className="font-p5 text-2xl tracking-wide line-clamp-1">{paper.title}</h3>
+                    <div className="flex items-center space-x-2 mt-2 opacity-80 font-mono text-xs">
+                        <span className="bg-white/20 px-1">{paper.year}</span>
+                        <span>// {paper.author}</span>
+                    </div>
+                </div>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Star className="fill-current" size={24} />
+                </div>
+            </div>
+            {/* SELECTION INDICATOR */}
+            {isSelected && <div className="absolute right-2 top-2 text-phantom-red"><Gem size={24} /></div>}
+        </motion.div>
+    );
+}, (prev, next) => {
+    // Custom comparison for performance
+    return (
+        prev.paper.id === next.paper.id && 
+        prev.isSelected === next.isSelected &&
+        prev.isSelectionMode === next.isSelectionMode && 
+        prev.isVelvet === next.isVelvet
+    );
+});
+
+const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onBulkImport, onBulkDelete, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx }: MiddlePaneProps) => {
+    const [inputUrl, setInputUrl] = useState('');
+    const [isStealing, setIsStealing] = useState(false);
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    
+    const isVelvet = activeMenu === 'velvet';
+    
+    // Memoize filtering to prevent recalc on every render
+    const filteredPapers = React.useMemo(() => papers.filter((p: any) => { 
+        if (activeMenu === 'all' || activeMenu === 'velvet') return true; 
+        if (activeMenu === 'recent') return true; 
+        if (activeMenu.startsWith('folder_')) return p.folderId === activeMenu.split('folder_')[1]; 
+        return false; 
+    }), [papers, activeMenu]);
+
+    const handleSteal = async (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        if (!inputUrl.trim()) return;
+        setIsStealing(true); 
+        playSfx('confirm'); 
+        try {
+            await onAddPaper(inputUrl); 
+            setInputUrl(''); 
+        } catch (error) {
+            console.error('Steal failed:', error);
+            playSfx('cancel');
+        } finally {
+            setIsStealing(false); 
+        }
+    };
+
+    const toggleSelection = useCallback((id: number) => { 
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); 
+        playSfx('click'); 
+    }, [playSfx]);
+
+    const executeBulkDelete = () => { 
+        if (window.confirm(`BURN ${selectedIds.length} INTEL ITEMS?`)) { 
+            onBulkDelete(selectedIds); 
+            setSelectedIds([]); 
+            setIsSelectionMode(false); 
+            playSfx('impact'); 
+        } 
+    };
+
+    const startFusion = () => { 
+        setShowCurtain(true); 
+        setTimeout(() => { 
+            setIsFusing(true); 
+            setFusionResult("The twins are converging... Ask me anything about their connection.");
+            setShowCurtain(false); 
+        }, 600); 
+        playSfx('confirm'); 
+    };
+
     return (
         <div className={`h-full flex-1 flex flex-col relative overflow-hidden transition-colors duration-500 ${isVelvet ? 'bg-[#000022]' : 'bg-[#161616]'}`}>
-            {/* Hidden Input for File Upload - Kept mounted at all times */}
+            {/* Hidden Input for File Upload */}
             <input 
                 type="file" 
                 id="middle-pane-upload"
@@ -121,7 +178,7 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                 onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
                         onBulkImport(e.target.files);
-                        e.target.value = ''; // Reset to allow re-uploading same file
+                        e.target.value = ''; 
                     }
                 }} 
             />
@@ -143,46 +200,26 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4 z-10 custom-scrollbar bg-halftone relative">
                 {activeMenu !== 'add' ? (
-                    <AnimatePresence>
+                    // Using normal div instead of AnimatePresence for list to improve performance on large lists
+                    // Only animate individual items entering/leaving if really needed, or rely on layout animations
+                    <div className="space-y-4">
                     {filteredPapers.map((paper: any, i: number) => { 
                         const isSelected = isVelvet ? fusionTargetIds.includes(paper.id) : (isSelectionMode ? selectedIds.includes(paper.id) : selectedId === paper.id); 
                         return (
-                            <motion.div 
-                                key={paper.id} 
-                                layoutId={`paper-${paper.id}`}
-                                custom={i}
-                                variants={cardVariants}
-                                initial="hidden"
-                                animate={isSelected ? "selected" : "visible"}
-                                whileHover="hover"
-                                whileTap="tap"
-                                onClick={() => isVelvet ? toggleFusionSelection(paper.id) : (isSelectionMode ? toggleSelection(paper.id) : onSelect(paper))} 
-                                className={`relative p-5 cursor-pointer group transition-colors duration-100 transform border-2 border-transparent ${
-                                    isSelected ? '' : 'bg-zinc-900 border-zinc-700 text-gray-300'
-                                }`}
-                                style={{ clipPath: "polygon(0 0, 98% 0, 100% 5%, 100% 95%, 95% 100%, 2% 98%, 0 90%, 3% 10%)" }}
-                            >
-                                {/* DECORATIVE SPIKE ON HOVER */}
-                                <div className="absolute -left-10 top-0 bottom-0 w-8 bg-black transform skew-x-12 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
-                                
-                                <div className="flex justify-between items-start relative z-10">
-                                    <div>
-                                        <h3 className="font-p5 text-2xl tracking-wide line-clamp-1">{paper.title}</h3>
-                                        <div className="flex items-center space-x-2 mt-2 opacity-80 font-mono text-xs">
-                                            <span className="bg-white/20 px-1">{paper.year}</span>
-                                            <span>// {paper.author}</span>
-                                        </div>
-                                    </div>
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Star className="fill-current" size={24} />
-                                    </div>
-                                </div>
-                                {/* SELECTION INDICATOR */}
-                                {isSelected && <div className="absolute right-2 top-2 text-phantom-red"><Gem size={24} /></div>}
-                            </motion.div>
+                            <PaperRow 
+                                key={paper.id}
+                                index={i}
+                                paper={paper}
+                                isSelected={isSelected}
+                                isSelectionMode={isSelectionMode}
+                                onSelect={onSelect}
+                                toggleFusionSelection={toggleFusionSelection}
+                                toggleSelection={toggleSelection}
+                                isVelvet={isVelvet}
+                            />
                         );
                     })}
-                    </AnimatePresence>
+                    </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center p-10 text-center animate-in fade-in zoom-in duration-500">
                         <Upload size={80} className="text-phantom-red mb-6 animate-bounce" />

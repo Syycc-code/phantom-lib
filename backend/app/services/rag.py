@@ -22,9 +22,14 @@ except ImportError:
 
 if RAG_AVAILABLE:
     try:
-        chroma_client = chromadb.Client()
+        # Use PersistentClient for data persistence
+        persist_path = os.path.join(settings.UPLOAD_DIR, "chroma_db")
+        os.makedirs(persist_path, exist_ok=True)
+        
+        chroma_client = chromadb.PersistentClient(path=persist_path)
         knowledge_collection = chroma_client.get_or_create_collection(name="phantom_knowledge")
-        print("[PHANTOM] Loading Embedding Model...")
+        
+        print(f"[PHANTOM] Loading Embedding Model... (DB Path: {persist_path})")
         embedder = SentenceTransformer('all-MiniLM-L6-v2')
         print("[PHANTOM] Embedding Model Ready.")
     except Exception as e:

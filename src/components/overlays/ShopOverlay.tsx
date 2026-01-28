@@ -29,7 +29,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'theme_default',
         name: 'PHANTOM RED',
         type: 'THEME',
-        desc: 'The original color of rebellion.',
+        desc: 'Default system theme. High contrast red and black interface.',
         cost: 0,
         currency: 'guts',
         value: '#E60012'
@@ -38,7 +38,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'theme_royal',
         name: 'ROYAL GOLD',
         type: 'THEME',
-        desc: 'A luxurious hue for the elite thief.',
+        desc: 'Gold accent theme inspired by P5R aesthetics.',
         cost: 2,
         currency: 'charm',
         value: '#D4AF37'
@@ -47,7 +47,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'theme_velvet',
         name: 'VELVET BLUE',
         type: 'THEME',
-        desc: 'The color of fate and contracts.',
+        desc: 'Deep blue theme offering a calm, focused reading environment.',
         cost: 3,
         currency: 'knowledge',
         value: '#1a45a0'
@@ -56,7 +56,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'theme_tv',
         name: 'MIDNIGHT YELLOW',
         type: 'THEME',
-        desc: 'Seek the truth within the fog.',
+        desc: 'Vibrant yellow theme with a retro broadcast feel.',
         cost: 2,
         currency: 'guts',
         value: '#FFE600'
@@ -65,7 +65,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'theme_hacker',
         name: 'MATRIX GREEN',
         type: 'THEME',
-        desc: 'Decrypt the code of reality.',
+        desc: 'Classic terminal green for low-light coding sessions.',
         cost: 2,
         currency: 'proficiency',
         value: '#00FF41'
@@ -75,7 +75,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'visualizer_audio',
         name: 'AUDIO VISUALIZER',
         type: 'EFFECT',
-        desc: 'Visualize the rhythm of the cognitive world.',
+        desc: 'Adds a dynamic audio spectrum visualizer to the system monitor.',
         cost: 3,
         currency: 'charm',
         value: 'visualizer'
@@ -84,7 +84,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'radar_threat',
         name: 'THREAT RADAR',
         type: 'EFFECT',
-        desc: 'Detects network anomalies and cognitive distortion.',
+        desc: 'Replaces standard metrics with a rotating radar interface.',
         cost: 2,
         currency: 'guts',
         value: 'radar'
@@ -94,7 +94,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'skin_sns',
         name: 'SNS STYLE',
         type: 'EFFECT',
-        desc: 'Anonymous chat network for the Phantom Thieves.',
+        desc: 'Modern messenger interface style for the AI chat window.',
         cost: 4,
         currency: 'charm',
         value: 'sns'
@@ -103,7 +103,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'skin_terminal',
         name: 'RETRO TERMINAL',
         type: 'EFFECT',
-        desc: 'Direct link to the Metaverse database.',
+        desc: 'Command-line style interface for AI interactions.',
         cost: 4,
         currency: 'knowledge',
         value: 'terminal'
@@ -113,7 +113,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'marker_neon',
         name: 'NEON HIGHLIGHTER',
         type: 'EFFECT',
-        desc: 'Highlights truth in the darkness.',
+        desc: 'Adds a glowing neon effect to highlighted text in translations.',
         cost: 2,
         currency: 'proficiency',
         value: 'neon'
@@ -122,7 +122,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'marker_redact',
         name: 'REDACTION TAPE',
         type: 'EFFECT',
-        desc: 'For eyes only. Hides sensitive intel.',
+        desc: 'Obscures translation text until hovered. Useful for memorization.',
         cost: 3,
         currency: 'knowledge',
         value: 'redact'
@@ -133,9 +133,18 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
     const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
     const [confirming, setConfirming] = useState(false);
+    const [activeTab, setActiveTab] = useState<'ALL' | 'THEMES' | 'GADGETS' | 'TOOLS'>('ALL');
 
     // Prioritize hover item, then selected item
     const activeDisplayItem = hoveredItem || selectedItem;
+
+    const filteredItems = SHOP_ITEMS.filter(item => {
+        if (activeTab === 'ALL') return true;
+        if (activeTab === 'THEMES') return item.type === 'THEME';
+        if (activeTab === 'GADGETS') return item.id.startsWith('visualizer_') || item.id.startsWith('radar_') || item.id.startsWith('skin_');
+        if (activeTab === 'TOOLS') return item.id.startsWith('marker_');
+        return true;
+    });
 
     const handleItemClick = (item: ShopItem) => {
         setSelectedItem(item);
@@ -212,6 +221,21 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                         </div>
                     </div>
 
+                    {/* CATEGORY TABS */}
+                    <div className="relative z-10 px-8 py-4 flex flex-col space-y-2">
+                        {['ALL', 'THEMES', 'GADGETS', 'TOOLS'].map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => { setActiveTab(tab as any); playSfx('click'); }}
+                                className={`text-left font-p5 text-xl tracking-widest transition-all hover:pl-2 ${
+                                    activeTab === tab ? 'text-phantom-red pl-4 border-l-4 border-phantom-red' : 'text-gray-500 hover:text-white'
+                                }`}
+                            >
+                                {tab}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Stats Wallet */}
                     <div className="relative z-10 p-8 flex-1">
                         <h3 className="text-xl font-p5 text-white mb-6 border-b border-gray-700 pb-2">YOUR SACRIFICE</h3>
@@ -251,7 +275,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                 <div className="w-2/3 bg-zinc-900 flex flex-col">
                     {/* Item List */}
                     <div className="flex-1 overflow-y-auto p-8 grid grid-cols-2 gap-4 content-start custom-scrollbar">
-                        {SHOP_ITEMS.map((item) => {
+                        {filteredItems.map((item) => {
                             const isOwned = inventory.includes(item.id);
                             let isEquipped = false;
                             if (item.type === 'THEME') isEquipped = equipped.theme === item.id;
