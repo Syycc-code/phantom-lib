@@ -46,8 +46,8 @@ async def process_paper(
     with open(save_path, "wb") as f:
         f.write(content)
     
-    # 2. 提取文本
-    preview_text = await extract_text_from_file(content, filename)
+    # 2. 提取文本 (Text + Spatial Metadata)
+    full_text, chunks = await extract_text_from_file(content, filename)
     
     # 3. 创建数据库记录
     new_paper = Paper(
@@ -56,7 +56,7 @@ async def process_paper(
         year=year,
         url=url,
         file_path=save_path,
-        abstract=preview_text[:500] + "..." if len(preview_text) > 500 else preview_text
+        abstract=full_text[:500] + "..." if len(full_text) > 500 else full_text
     )
     session.add(new_paper)
     session.commit()
@@ -65,7 +65,10 @@ async def process_paper(
     try:
         # 4. 触发后台任务（添加安全检查）
         # 将同步的 index_document 放入线程池，避免阻塞
-        asyncio.create_task(asyncio.to_thread(_safe_index_document, preview_text, filename))
+        # Updated: Pass chunks (with bbox) instead of raw text
+        # CRITICAL: Use Paper ID as source for RAG to allow filtering by Folder
+        rag_source = str(new_paper.id)
+        asyncio.create_task(asyncio.to_thread(_safe_index_document, chunks, rag_source))
         
         # 只在有ID和abstract时触发分析
         if new_paper.id and new_paper.abstract:
@@ -75,10 +78,10 @@ async def process_paper(
     
     return new_paper
 
-def _safe_index_document(text: str, filename: str):
+def _safe_index_document(chunks: list, filename: str):
     """Wrapper to prevent RAG crashes from killing the app"""
     try:
-        index_document(text, filename)
+        index_document(chunks, filename)
     except Exception as e:
         print(f"[RAG INDEX ERROR] Failed to index {filename}: {e}")
 

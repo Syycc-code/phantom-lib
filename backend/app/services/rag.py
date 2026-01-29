@@ -58,12 +58,65 @@ def get_rag_components():
             print("[PHANTOM] ChromaDB Connected.")
         except Exception as e:
             print(f"[PHANTOM] ChromaDB Init Failed: {e}")
-            raise e
+            # Auto-recovery for schema mismatches (e.g., 'no such column: collections.topic')
+            if "no such column" in str(e) or "database disk image is malformed" in str(e):
+                print(f"[PHANTOM] DETECTED DB CORRUPTION. PERFORMING AUTO-RESET...")
+                import shutil
+                try:
+                    if os.path.exists(persist_path):
+                        shutil.rmtree(persist_path)
+                    os.makedirs(persist_path, exist_ok=True)
+                    print(f"[PHANTOM] DB RESET SUCCESSFUL. RETRYING INIT...")
+                    
+                    # Retry Init
+                    _chroma_client = chromadb.PersistentClient(
+                        path=persist_path,
+                        settings=ChromaSettings(anonymized_telemetry=False, allow_reset=True)
+                    )
+                    _knowledge_collection = _chroma_client.get_or_create_collection(name="phantom_knowledge")
+                    print("[PHANTOM] ChromaDB Re-Connected after Reset.")
+                except Exception as retry_e:
+                    print(f"[PHANTOM] AUTO-RESET FAILED: {retry_e}")
+                    raise retry_e
+            else:
+                raise e
 
         try:
             print(f"[PHANTOM] Loading Embedding Model (this may take a moment)...")
             # Force CPU if CUDA OOM or issues
-            _embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu') 
+            # Switch to Multilingual model for better Chinese support
+            
+            # FIX: Use local cache path explicitly or try-catch download
+            # We can also use 'all-MiniLM-L6-v2' which is smaller and less likely to timeout
+            os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+            
+            try:
+                # OPTIMIZATION: Only download pytorch weights, skip onnx/openvino
+                # from huggingface_hub import snapshot_download
+                # model_name = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+                # FALLBACK: Use smaller model to avoid network timeouts
+                model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+                
+                print("[PHANTOM] Loading Embedding Model...")
+                # Simplified loading - let SentenceTransformer handle caching
+                _embedder = SentenceTransformer(model_name, device='cpu')
+                
+                # Check if model is already cached fully or partially
+                # If we are here, previous download might be partial.
+                # Just using SentenceTransformer() triggers full repo download.
+                # So we use snapshot_download to restrict files.
+                # print("[PHANTOM] Ensuring only core model files are present...")
+                # local_dir = snapshot_download(
+                #     repo_id=model_name,
+                #     allow_patterns=["*.json", "*.txt", "pytorch_model.bin", "*.safetensors", "tokenizer*"],
+                #     ignore_patterns=["*.onnx", "*.xml", "*.bin"], # Explicitly ignore heavy extra formats
+                #     local_dir_use_symlinks=False
+                # )
+                # _embedder = SentenceTransformer(local_dir, device='cpu')
+            except Exception as dl_error:
+                print(f"[PHANTOM] Download Timeout/Error: {dl_error}. Retrying with smaller model...")
+                _embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                
             print("[PHANTOM] Embedding Model Loaded.")
         except Exception as e:
              print(f"[PHANTOM] Model Load Failed: {e}")
@@ -77,72 +130,117 @@ def get_rag_components():
         RAG_AVAILABLE = False
         return None, None, None
 
-def index_document(text: str, filename: str):
+def index_document(chunks_data: list, filename: str):
+    """
+    Args:
+        chunks_data: List of dicts {text, page, bbox} from OCR
+        filename: Source filename
+    """
     client, collection, embedder = get_rag_components()
     if not collection or not embedder: return
     
-    # ... (rest of function remains same, just use local vars)
-    # Robust chunking with overlap
-    chunk_size = 500
-    overlap = 100
-    chunks = []
-    start = 0
-    text_len = len(text)
+    if not chunks_data: return
     
-    while start < text_len:
-        end = start + chunk_size
-        if end >= text_len:
-            chunks.append(text[start:])
-            break
-            
-        # Try to find a natural break point (newline, period, space)
-        break_found = False
-        for sep in ['\n', '. ', ' ']:
-            # Search in the last 20% of the candidate chunk
-            idx = text.rfind(sep, max(0, int(end - 100)), end)
-            if idx != -1:
-                end = idx + len(sep)
-                break_found = True
-                break
-        
-        chunks.append(text[start:end])
-        # Move start forward: if we found a break, we can overlap slightly or just continue
-        # To be safe and keep context, we always overlap
-        start = max(start + 1, end - overlap)
-        
-    if not chunks: return
-    
-    embeddings = embedder.encode(chunks).tolist()
-    ids = [f"{filename}_{uuid.uuid4()}" for _ in chunks]
-    metadatas = [{"source": filename} for _ in chunks]
-    
-    collection.add(
-        documents=chunks,
-        embeddings=embeddings,
-        metadatas=metadatas,
-        ids=ids
-    )
-    print(f"[MEMORY] Indexed {len(chunks)} fragments from {filename}")
+    # Filter out empty chunks
+    valid_chunks = [c for c in chunks_data if c.get("text", "").strip()]
+    if not valid_chunks: return
 
-def retrieve_context(query: str, n_results=2):
+    # Prepare data for Chroma
+    texts = [c["text"] for c in valid_chunks]
+    
+    # Generate Metadata
+    # Chroma metadata values must be str, int, float, or bool. No lists.
+    # So we serialize bbox to string.
+    metadatas = [{
+        "source": filename,
+        "page": c["page"],
+        "bbox": str(c["bbox"]) # Serialize list to string "[x0,y0,x1,y1]"
+    } for c in valid_chunks]
+    
+    ids = [f"{filename}_{uuid.uuid4()}" for _ in valid_chunks]
+    
+    # Batch processing to avoid hitting limits
+    BATCH_SIZE = 100
+    total_chunks = len(texts)
+    
+    print(f"[MEMORY] Indexing {total_chunks} chunks from {filename} with spatial data...")
+    
+    for i in range(0, total_chunks, BATCH_SIZE):
+        batch_texts = texts[i:i+BATCH_SIZE]
+        batch_metas = metadatas[i:i+BATCH_SIZE]
+        batch_ids = ids[i:i+BATCH_SIZE]
+        
+        embeddings = embedder.encode(batch_texts).tolist()
+        
+        collection.add(
+            documents=batch_texts,
+            embeddings=embeddings,
+            metadatas=batch_metas,
+            ids=batch_ids
+        )
+    
+    print(f"[MEMORY] Indexing Complete: {filename}")
+
+def retrieve_context(query: str, n_results=5, file_filter: list[str] = None): # Added file_filter
     client, collection, embedder = get_rag_components()
     if not collection or not embedder:
         return "", []
     
     try:
         q_vec = embedder.encode([query]).tolist()
-        results = collection.query(query_embeddings=q_vec, n_results=n_results)
+        
+        # Build Chroma Where Clause
+        where_clause = {}
+        if file_filter:
+            if len(file_filter) == 1:
+                where_clause = {"source": file_filter[0]}
+            else:
+                where_clause = {"source": {"$in": file_filter}}
+        
+        print(f"[DEBUG RAG] Query: '{query}'")
+        print(f"[DEBUG RAG] Where Clause: {where_clause}")
+        
+        # DEBUG: Check total count in collection
+        print(f"[DEBUG RAG] Total in Collection: {collection.count()}")
+        
+        # DEBUG: Check if ANY document matches source '1'
+        if file_filter:
+            check_source = collection.get(where={"source": file_filter[0]})
+            print(f"[DEBUG RAG] Items with source='{file_filter[0]}': {len(check_source['ids'])}")
+
+        results = collection.query(
+            query_embeddings=q_vec, 
+            n_results=n_results,
+            where=where_clause if file_filter else None # Apply filter
+        )
         
         context_text = ""
+        citations = [] # List of {id, text, page, bbox}
         sources = set()
         
         if results.get('documents'):
             for i, doc in enumerate(results['documents'][0]):
                 meta = results['metadatas'][0][i]
                 src = meta.get('source', 'Unknown')
-                context_text += f"[Source: {src}]\n{doc}\n\n"
+                page = meta.get('page', 1)
+                bbox = meta.get('bbox', '[]')
+                
+                # Assign a citation index (1-based)
+                citation_index = i + 1
+                
+                # Format for LLM: [1] Text... (Source: X, Page: Y)
+                context_text += f"[{citation_index}] {doc} (Source: {src}, Page: {page})\n\n"
+                
+                citations.append({
+                    "index": citation_index,
+                    "text": doc,
+                    "source": src,
+                    "page": page,
+                    "bbox": bbox # String format, frontend needs to parse
+                })
                 sources.add(src)
-        return context_text, list(sources)
+                
+        return context_text, citations # Return citations list as well
     except Exception as e:
         print(f"[RAG Error] {e}")
         return "", []

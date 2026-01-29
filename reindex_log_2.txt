@@ -1,0 +1,19 @@
+[CONFIG] Loading environment from: C:\Users\26320\Desktop\女神异闻录project\phantom-lib\.env
+[CONFIG] [OK] DeepSeek API Key loaded: sk-12...46c
+[PHANTOM] OCR Engine: DISABLED (Segfault Prevention)
+C:\Users\26320\anaconda3\Lib\site-packages\onnxruntime\capi\onnxruntime_validation.py:26: UserWarning: Unsupported Windows version (11). ONNX Runtime supports Windows 10 and above, only.
+  warnings.warn(
+=== PHANTOM LIBRARY RE-INDEXER ===
+Database: sqlite:///C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\phantom_database.db
+Uploads Dir: C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\uploads
+Found 2 papers in database.
+
+Processing ID 1: 2107.03006v3.pdf
+  - Extracting text from C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\uploads\5ef59805-5eaa-436a-a1f6-4c8e164b4f71.pdf...
+  - Indexing 523 chunks...
+[PHANTOM] Initializing RAG (Lazy)... Path: C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\uploads\chroma_db
+[PHANTOM] ChromaDB Connected.
+[PHANTOM] Loading Embedding Model (this may take a moment)...
+[PHANTOM] Loading Embedding Model...
+[PHANTOM] Embedding Model Loaded.
+[MEMORY] Indexing 523 chunks from 1 with spatial data...

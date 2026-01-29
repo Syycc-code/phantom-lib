@@ -1,0 +1,43 @@
+[CONFIG] Loading environment from: C:\Users\26320\Desktop\女神异闻录project\phantom-lib\.env
+[CONFIG] [OK] DeepSeek API Key loaded: sk-12...46c
+C:\Users\26320\anaconda3\Lib\site-packages\onnxruntime\capi\onnxruntime_validation.py:26: UserWarning: Unsupported Windows version (11). ONNX Runtime supports Windows 10 and above, only.
+  warnings.warn(
+2026-01-29 17:41:42,292 - OrtInferSession - WARNING: CUDAExecutionProvider is not in available providers (['AzureExecutionProvider', 'CPUExecutionProvider']). Use AzureExecutionProvider inference by default.
+2026-01-29 17:41:42,292 - OrtInferSession - INFO: !!!Recommend to use rapidocr_paddle for inference on GPU.
+2026-01-29 17:41:42,293 - OrtInferSession - INFO: (For reference only) If you want to use GPU acceleration, you must do:
+2026-01-29 17:41:42,293 - OrtInferSession - INFO: First, uninstall all onnxruntime pakcages in current environment.
+2026-01-29 17:41:42,293 - OrtInferSession - INFO: Second, install onnxruntime-gpu by `pip install onnxruntime-gpu`.
+2026-01-29 17:41:42,293 - OrtInferSession - INFO: 	Note the onnxruntime-gpu version must match your cuda and cudnn version.
+2026-01-29 17:41:42,293 - OrtInferSession - INFO: 	You can refer this link: https://onnxruntime.ai/docs/execution-providers/CUDA-EP.html
+2026-01-29 17:41:42,293 - OrtInferSession - INFO: Third, ensure CUDAExecutionProvider is in available providers list. e.g. ['CUDAExecutionProvider', 'CPUExecutionProvider']
+2026-01-29 17:41:42,880 - OrtInferSession - WARNING: CUDAExecutionProvider is not in available providers (['AzureExecutionProvider', 'CPUExecutionProvider']). Use AzureExecutionProvider inference by default.
+2026-01-29 17:41:42,880 - OrtInferSession - INFO: !!!Recommend to use rapidocr_paddle for inference on GPU.
+2026-01-29 17:41:42,881 - OrtInferSession - INFO: (For reference only) If you want to use GPU acceleration, you must do:
+2026-01-29 17:41:42,881 - OrtInferSession - INFO: First, uninstall all onnxruntime pakcages in current environment.
+2026-01-29 17:41:42,881 - OrtInferSession - INFO: Second, install onnxruntime-gpu by `pip install onnxruntime-gpu`.
+2026-01-29 17:41:42,881 - OrtInferSession - INFO: 	Note the onnxruntime-gpu version must match your cuda and cudnn version.
+2026-01-29 17:41:42,881 - OrtInferSession - INFO: 	You can refer this link: https://onnxruntime.ai/docs/execution-providers/CUDA-EP.html
+2026-01-29 17:41:42,881 - OrtInferSession - INFO: Third, ensure CUDAExecutionProvider is in available providers list. e.g. ['CUDAExecutionProvider', 'CPUExecutionProvider']
+2026-01-29 17:41:42,957 - OrtInferSession - WARNING: CUDAExecutionProvider is not in available providers (['AzureExecutionProvider', 'CPUExecutionProvider']). Use AzureExecutionProvider inference by default.
+2026-01-29 17:41:42,957 - OrtInferSession - INFO: !!!Recommend to use rapidocr_paddle for inference on GPU.
+2026-01-29 17:41:42,957 - OrtInferSession - INFO: (For reference only) If you want to use GPU acceleration, you must do:
+2026-01-29 17:41:42,957 - OrtInferSession - INFO: First, uninstall all onnxruntime pakcages in current environment.
+2026-01-29 17:41:42,957 - OrtInferSession - INFO: Second, install onnxruntime-gpu by `pip install onnxruntime-gpu`.
+2026-01-29 17:41:42,958 - OrtInferSession - INFO: 	Note the onnxruntime-gpu version must match your cuda and cudnn version.
+2026-01-29 17:41:42,958 - OrtInferSession - INFO: 	You can refer this link: https://onnxruntime.ai/docs/execution-providers/CUDA-EP.html
+2026-01-29 17:41:42,958 - OrtInferSession - INFO: Third, ensure CUDAExecutionProvider is in available providers list. e.g. ['CUDAExecutionProvider', 'CPUExecutionProvider']
+[PHANTOM] OCR Engine: Fallback to CPU. ('gbk' codec can't encode character '\U0001f680' in position 63: illegal multibyte sequence)
+=== PHANTOM LIBRARY RE-INDEXER ===
+Database: sqlite:///C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\phantom_database.db
+Uploads Dir: C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\uploads
+Found 2 papers in database.
+
+Processing ID 1: 2107.03006v3.pdf
+  - Extracting text from C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\uploads\5ef59805-5eaa-436a-a1f6-4c8e164b4f71.pdf...
+  - Indexing 523 chunks...
+[PHANTOM] Initializing RAG (Lazy)... Path: C:\Users\26320\Desktop\女神异闻录project\phantom-lib\backend\uploads\chroma_db
+[PHANTOM] ChromaDB Connected.
+[PHANTOM] Loading Embedding Model (this may take a moment)...
+[PHANTOM] Loading Embedding Model...
+[PHANTOM] Embedding Model Loaded.
+[MEMORY] Indexing 523 chunks from 1 with spatial data...

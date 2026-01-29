@@ -806,7 +806,17 @@ function App() {
             />
         )}
       </AnimatePresence>
-      <PhantomIM variant={equipped.effect_im} />
+      {/* Show IM only if inside a folder or reading (global context if reading) */}
+      {(activeMenu.startsWith('folder_') || isReading) && (
+          <PhantomIM 
+            variant={equipped.effect_im} 
+            scope={
+                activeMenu.startsWith('folder_') 
+                ? { folder_id: parseInt(activeMenu.split('_')[1]), name: folders.find(f => f.id === activeMenu.split('_')[1])?.name } 
+                : undefined
+            } 
+          />
+      )}
     </div>
   );
 }

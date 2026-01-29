@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 import os
 
 from app.core.config import settings
-from app.api.endpoints import papers, chat, monitor, sync, folders
+from app.api.endpoints import papers, chat, monitor, sync, folders, debug
 from app.services.rag import RAG_AVAILABLE
 from sqlmodel import SQLModel
 from app.api.deps import engine
@@ -61,3 +61,4 @@ app.include_router(papers.router, prefix=settings.API_V1_STR, tags=["Papers"])
 app.include_router(chat.router, prefix=settings.API_V1_STR, tags=["Chat"])
 # Trigger Reload V2
 app.include_router(sync.router, prefix=settings.API_V1_STR + "/sync", tags=["Sync"])
+app.include_router(debug.router, prefix=settings.API_V1_STR + "/debug", tags=["Debug"])

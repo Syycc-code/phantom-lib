@@ -56,6 +56,8 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
     
     // Highlight State
     const [highlightedText, setHighlightedText] = useState<string | null>(null);
+    const [citationHighlight, setCitationHighlight] = useState<{page: number, bbox: number[]} | null>(null);
+    const [pageDimensions, setPageDimensions] = useState<Record<number, {width: number, height: number}>>({});
     
     // Refs
     const contentRef = useRef<HTMLDivElement>(null);
@@ -66,6 +68,58 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
     const activeDriver = useRef<'left' | 'right' | null>(null);
 
     useEffect(() => { onLevelUp('guts'); }, []);
+
+    // --- EVENT LISTENER: PHANTOM_JUMP_TO_PDF ---
+    useEffect(() => {
+        const handleJump = (e: CustomEvent) => {
+            const { page, bbox } = e.detail;
+            if (!page) return;
+
+            // 1. Parse bbox if it's a string
+            let parsedBbox: number[] = [];
+            if (typeof bbox === 'string') {
+                try { parsedBbox = JSON.parse(bbox); } catch (e) {}
+            } else if (Array.isArray(bbox)) {
+                parsedBbox = bbox;
+            }
+
+            // 2. Set Highlight State
+            setCitationHighlight({ page, bbox: parsedBbox });
+            
+            // 3. Scroll to Page
+            const pageIndex = page - 1;
+            const targetEl = pageRefs.current[pageIndex];
+            if (targetEl && containerRef.current) {
+                // Calculate scroll position to center the bbox vertically if possible
+                let offset = targetEl.offsetTop;
+                
+                // If we have bbox and dimensions, try to center on the specific text
+                if (parsedBbox.length === 4 && pageDimensions[page]) {
+                    const [_, y0, __, y1] = parsedBbox;
+                    const pdfHeight = pageDimensions[page].height;
+                    const renderedHeight = targetEl.clientHeight;
+                    const scale = renderedHeight / pdfHeight;
+                    
+                    const bboxTop = y0 * scale;
+                    const bboxHeight = (y1 - y0) * scale;
+                    
+                    // Add bbox offset to page top offset
+                    offset += bboxTop - (containerRef.current.clientHeight / 2) + (bboxHeight / 2);
+                } else {
+                    // Default: scroll to top of page with slight padding
+                    offset -= 20; 
+                }
+
+                containerRef.current.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+            }
+            
+            // 4. Auto-clear highlight after 5 seconds
+            setTimeout(() => setCitationHighlight(null), 5000);
+        };
+
+        window.addEventListener('PHANTOM_JUMP_TO_PDF', handleJump as EventListener);
+        return () => window.removeEventListener('PHANTOM_JUMP_TO_PDF', handleJump as EventListener);
+    }, [pageDimensions]); // Depend on pageDimensions for accurate scrolling
 
     // --- INTERSECTION OBSERVER ---
     useEffect(() => {
@@ -337,7 +391,33 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                                     ref={el => { pageRefs.current[index] = el; }}
                                     className="relative w-full flex justify-center"
                                 >
-                                    <Page pageNumber={index + 1} renderTextLayer={true} renderAnnotationLayer={true} width={splitMode ? (containerRef.current ? containerRef.current.offsetWidth * 0.9 : 500) : undefined} scale={splitMode ? undefined : 1.2} className="bg-white shadow-lg border border-gray-200 max-w-full" loading={<PhantomLoader message="DECRYPTING" />} />
+                                    <Page 
+                                        pageNumber={index + 1} 
+                                        renderTextLayer={true} 
+                                        renderAnnotationLayer={true} 
+                                        width={splitMode ? (containerRef.current ? containerRef.current.offsetWidth * 0.9 : 500) : undefined} 
+                                        scale={splitMode ? undefined : 1.2} 
+                                        className="bg-white shadow-lg border border-gray-200 max-w-full" 
+                                        loading={<PhantomLoader message="DECRYPTING" />} 
+                                        onLoadSuccess={(page) => {
+                                            setPageDimensions(prev => ({
+                                                ...prev,
+                                                [index + 1]: { width: page.view[2], height: page.view[3] }
+                                            }));
+                                        }}
+                                    />
+                                    {/* CITATION HIGHLIGHT OVERLAY */}
+                                    {citationHighlight && citationHighlight.page === index + 1 && citationHighlight.bbox.length === 4 && pageDimensions[index + 1] && (
+                                        <div
+                                            className="absolute bg-phantom-yellow/40 border-2 border-phantom-red mix-blend-multiply z-20 pointer-events-none animate-pulse"
+                                            style={{
+                                                left: `${(citationHighlight.bbox[0] / pageDimensions[index + 1].width) * 100}%`,
+                                                top: `${(citationHighlight.bbox[1] / pageDimensions[index + 1].height) * 100}%`,
+                                                width: `${((citationHighlight.bbox[2] - citationHighlight.bbox[0]) / pageDimensions[index + 1].width) * 100}%`,
+                                                height: `${((citationHighlight.bbox[3] - citationHighlight.bbox[1]) / pageDimensions[index + 1].height) * 100}%`,
+                                            }}
+                                        />
+                                    )}
                                     <div className="absolute -left-8 top-0 text-xs font-mono opacity-50 text-black">{index + 1}</div>
                                 </div>
                             ))}

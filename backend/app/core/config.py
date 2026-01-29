@@ -32,7 +32,7 @@ class Settings:
     HF_ENDPOINT: str = "https://hf-mirror.com"
     
     # Paths
-    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIR: str = os.path.join(BASE_DIR, "uploads")
 
 settings = Settings()
 

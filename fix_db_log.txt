@@ -1,0 +1,1 @@
+Database phantom_database.db not found. A new one will be created on startup.

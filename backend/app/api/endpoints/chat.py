@@ -4,9 +4,12 @@ import asyncio
 from typing import Optional, List
 from pydantic import BaseModel
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session, select
 
+from app.api.deps import get_session
+from app.models.paper import Paper
 from app.services.rag import deepseek_client, retrieve_context, RAG_AVAILABLE
 from app.services.search import perform_web_search, SEARCH_AVAILABLE
 from app.core.config import settings
@@ -18,13 +21,17 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     query: str
     history: Optional[List[dict]] = []
+    scope: Optional[dict] = None # { folder_id: 123 }
 
 class MindHackRequest(BaseModel):
     text: str
     mode: str
 
 @router.post("/chat_stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(
+    request: ChatRequest,
+    session: Session = Depends(get_session)
+):
     system_metrics["ai_state"] = "THINKING"
     system_metrics["last_activity"] = time.time()
     start_time = time.time()
@@ -33,35 +40,90 @@ async def chat_stream(request: ChatRequest):
         try:
             # 1. RAG
             print(f"[CHAT] Starting RAG... Available: {RAG_AVAILABLE}")
+            citations = []
+            
+            # Filter Logic & System Context
+            file_filter = None
+            scope_info = "Current Scope: GLOBAL (Searching all files)."
+            
+            if request.scope and request.scope.get('folder_id'):
+                folder_id = request.scope['folder_id']
+                folder_name = request.scope.get('name', 'Unknown Folder')
+                # Get all paper IDs in this folder
+                papers = session.exec(select(Paper).where(Paper.folder_id == int(folder_id))).all()
+                if papers:
+                    file_filter = [str(p.id) for p in papers]
+                    paper_titles = ", ".join([f"'{p.title}'" for p in papers])
+                    scope_info = f"Current Scope: Folder '{folder_name}'. Contains {len(papers)} files: [{paper_titles}]."
+                    print(f"[CHAT] Scope: Folder {folder_id} -> Papers: {file_filter}")
+                else:
+                    scope_info = f"Current Scope: Folder '{folder_name}'. This folder is EMPTY."
+                    print(f"[CHAT] Scope: Folder {folder_id} is empty.")
+                    file_filter = ["__empty__"] # Force no results
+            else:
+                # Global Scope - Count total files
+                total_count = session.exec(select(Paper)).all() # Optimize later with count()
+                scope_info = f"Current Scope: GLOBAL. Knowledge Base contains {len(total_count)} files."
+
             if RAG_AVAILABLE:
                 try:
-                    context_text, sources = await asyncio.to_thread(retrieve_context, request.query)
-                    print(f"[CHAT] RAG Complete. Sources: {len(sources)}")
+                    # Updated retrieve_context returns (text, citations_list)
+                    context_text, citations = await asyncio.to_thread(retrieve_context, request.query, file_filter=file_filter)
+                    print(f"[CHAT] RAG Complete. Citations found: {len(citations)}")
                 except Exception as e:
                     print(f"[CHAT] RAG Failed: {e}")
-                    context_text, sources = "", []
+                    context_text = ""
             else:
-                context_text, sources = "", []
+                context_text = ""
 
-            if not context_text: context_text = "No relevant internal documents found."
+            # Prepend System Info to Context
+            final_context = f"【System Metadata】\n{scope_info}\n\n"
+
+            # 1.5 ABSTRACT FALLBACK (Smart Context)
+            # If RAG found nothing (or very little), and we have specific papers in scope,
+            # inject their abstracts directly. This handles "Summarize this" queries perfectly.
+            if (not citations or len(citations) == 0) and request.scope and request.scope.get('folder_id'):
+                # We already fetched 'papers' (SQL models) above
+                if papers and len(papers) <= 5: # Limit to 5 papers to fit in context
+                    print("[CHAT] RAG empty. Injecting Abstracts as fallback context.")
+                    abstracts_text = ""
+                    for p in papers:
+                        if p.abstract:
+                            abstracts_text += f"\n[Abstract of '{p.title}']:\n{p.abstract}\n"
+                    
+                    if abstracts_text:
+                        context_text = f"【Direct Paper Abstracts】{abstracts_text}\n\n" + context_text
+                        # Fake source for UI
+                        sources.append("Paper Abstract")
+
+            final_context += f"【Retrieved Content】\n{context_text if context_text else 'No specific content matches found via RAG search.'}"
 
             # 2. Web Search
-            if "No relevant internal documents found" in context_text and SEARCH_AVAILABLE:
+            sources = list(set(sources + [c.get('source', 'Unknown') for c in citations])) # Merge sources
+            
+            # Only search web if context is truly empty
+            # (Check if we added abstracts or RAG results)
+            is_context_empty = not context_text.strip()
+            
+            if is_context_empty and SEARCH_AVAILABLE:
                 system_metrics["ai_state"] = "SEARCHING"
                 yield f"data: {json.dumps({'content': '🔍 [Searching Web]...\\n'}, ensure_ascii=False)}\n\n"
                 web_res = await asyncio.to_thread(perform_web_search, request.query)
                 if web_res:
-                    context_text = f"【Web Intel】\n{web_res}"
+                    final_context += f"\n\n【Web Intel】\n{web_res}"
                     sources.append("Global Network")
                 system_metrics["ai_state"] = "THINKING"
 
             # 3. Prompt
-            messages = [{"role": "system", "content": SYSTEM_PROMPTS["CHAT_NAVI"]}]
+            # Inject citation instruction
+            citation_instruction = "IMPORTANT: Use the provided context to answer. When citing specific information, append [index] at the end of the sentence. Example: 'The method uses X [1].'"
+            
+            messages = [{"role": "system", "content": SYSTEM_PROMPTS["CHAT_NAVI"] + "\n" + citation_instruction}]
             if request.history:
                 for msg in request.history[-6:]:
                     role = "assistant" if msg.get("role") == "oracle" else "user"
                     messages.append({"role": role, "content": msg.get("content", "")})
-            messages.append({"role": "user", "content": f"Context:\n{context_text}\n\nQuery: {request.query}"})
+            messages.append({"role": "user", "content": f"Context:\n{final_context}\n\nQuery: {request.query}"})
 
             # 4. Stream
             if not settings.DEEPSEEK_API_KEY or settings.DEEPSEEK_API_KEY == "mock-key":
@@ -84,7 +146,9 @@ async def chat_stream(request: ChatRequest):
             system_metrics["ai_latency_ms"] = int((time.time() - start_time) * 1000)
             system_metrics["ai_state"] = "IDLE"
             system_metrics["last_activity"] = time.time()
-            yield f"data: {json.dumps({'done': True, 'sources': sources}, ensure_ascii=False)}\n\n"
+            
+            # Send citations with the done event
+            yield f"data: {json.dumps({'done': True, 'sources': sources, 'citations': citations}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             system_metrics["ai_state"] = "ERROR"

@@ -1,59 +1,96 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import fitz  # PyMuPDF
+from typing import Tuple, List, Dict, Any
 
 try:
-    from rapidocr_onnxruntime import RapidOCR
+    # from rapidocr_onnxruntime import RapidOCR
     # Attempt GPU
-    try:
-        ocr_engine = RapidOCR(det_use_cuda=True, cls_use_cuda=True, rec_use_cuda=True)
-        print("[PHANTOM] OCR Engine: GPU Acceleration ENABLED (RTX 4060 Mode) 🚀")
-    except Exception as e:
-        print(f"[PHANTOM] OCR Engine: Fallback to CPU. ({e})")
-        ocr_engine = RapidOCR()
+    # try:
+    #     ocr_engine = RapidOCR(det_use_cuda=True, cls_use_cuda=True, rec_use_cuda=True)
+    #     print("[PHANTOM] OCR Engine: GPU Acceleration ENABLED (RTX 4060 Mode) 🚀")
+    # except Exception as e:
+    #     print(f"[PHANTOM] OCR Engine: Fallback to CPU. ({e})")
+    #     ocr_engine = RapidOCR()
+    print("[PHANTOM] OCR Engine: DISABLED (Segfault Prevention)")
+    ocr_engine = None
 except ImportError as e:
     print(f"[PHANTOM] RapidOCR Import Failed: {e}")
     ocr_engine = None
 
 executor = ThreadPoolExecutor(max_workers=4)
 
-def extract_text_from_file_sync(file_content: bytes, filename: str) -> str:
+def extract_text_from_file_sync(file_content: bytes, filename: str) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Returns:
+        full_text: concatenated string for general use
+        chunks: list of dicts {text, page, bbox} for RAG indexing
+    """
     extracted_text = ""
+    chunks = []
+    
     try:
         if filename.lower().endswith(".pdf"):
             with fitz.open(stream=file_content, filetype="pdf") as doc:
-                # 只处理前5页，避免超时（快速预览模式）
-                max_pages = min(5, doc.page_count)
-                target_pages = range(max_pages)
+                # Process ALL pages for indexing, but limit text preview if needed
+                # For RAG, we want full content.
                 
-                for page_num in target_pages:
-                    page = doc.load_page(page_num)
-                    text = page.get_text()
-                    # Skip OCR if text layer exists (>15 chars)
-                    if len(text.strip()) > 15:
-                        extracted_text += f"\n--- Page {page_num+1} ---\n{text}\n"
-                        continue
+                for page_num, page in enumerate(doc):
+                    # 1. Try extracting text blocks with coordinates
+                    blocks = page.get_text("blocks")
+                    page_has_text = False
                     
-                    # OCR Fallback
-                    if ocr_engine:
+                    if blocks:
+                        for b in blocks:
+                            # block format: (x0, y0, x1, y1, "text", block_no, block_type)
+                            if b[6] == 0: # 0 = text
+                                x0, y0, x1, y1, text, _, _ = b
+                                clean_text = text.strip()
+                                if len(clean_text) > 1:
+                                    chunks.append({
+                                        "text": clean_text,
+                                        "page": page_num + 1, # 1-based index
+                                        "bbox": [x0, y0, x1, y1]
+                                    })
+                                    extracted_text += clean_text + "\n\n"
+                                    page_has_text = True
+                    
+                    # 2. OCR Fallback if page is empty image
+                    if not page_has_text and ocr_engine:
+                        # Note: RapidOCR doesn't give PDF coordinates easily without complex mapping.
+                        # For now, we treat OCR content as page-level chunk without precise bbox.
                         pix = page.get_pixmap(dpi=72)
                         result, _ = ocr_engine(pix.tobytes("png"))
                         if result:
-                            extracted_text += f"\n--- Page {page_num+1} (OCR) ---\n" + "\n".join([line[1] for line in result])
-                
-                # 如果文档很长，添加提示
-                if doc.page_count > max_pages:
-                    extracted_text += f"\n\n[... {doc.page_count - max_pages} more pages not shown in preview ...]"
-                            
+                            ocr_text = "\n".join([line[1] for line in result])
+                            if ocr_text.strip():
+                                chunks.append({
+                                    "text": ocr_text,
+                                    "page": page_num + 1,
+                                    "bbox": [0, 0, page.rect.width, page.rect.height] # Full page bbox
+                                })
+                                extracted_text += f"\n--- Page {page_num+1} (OCR) ---\n{ocr_text}\n"
+
         elif filename.lower().endswith(('.png', '.jpg', '.jpeg')) and ocr_engine:
             result, _ = ocr_engine(file_content)
-            if result: extracted_text = "\n".join([line[1] for line in result])
+            if result: 
+                text = "\n".join([line[1] for line in result])
+                extracted_text = text
+                chunks.append({
+                    "text": text,
+                    "page": 1,
+                    "bbox": [0, 0, 0, 0] # Unknown
+                })
         else:
             extracted_text = file_content.decode('utf-8', errors='ignore')
+            chunks.append({"text": extracted_text, "page": 1, "bbox": []})
+            
     except Exception as e:
-        return f"[OCR ERROR] {str(e)}"
-    return extracted_text
+        print(f"[OCR ERROR] {str(e)}")
+        return f"[OCR ERROR] {str(e)}", []
+        
+    return extracted_text, chunks
 
-async def extract_text_from_file(file_content: bytes, filename: str) -> str:
+async def extract_text_from_file(file_content: bytes, filename: str) -> Tuple[str, List[Dict[str, Any]]]:
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, extract_text_from_file_sync, file_content, filename)
