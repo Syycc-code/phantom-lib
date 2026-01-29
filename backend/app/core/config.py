@@ -15,7 +15,7 @@ if not os.getenv("DEEPSEEK_API_KEY"):
 
 class Settings:
     PROJECT_NAME: str = "Phantom Library"
-    VERSION: str = "2.1.0"
+    VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
     
     # Database (Absolute Path Fix)

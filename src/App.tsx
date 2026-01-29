@@ -36,7 +36,8 @@ import {
   RankUpNotification,
   StatsOverlay,
   TransitionCurtain,
-  CallingCard
+  CallingCard,
+  ManualOverlay
 } from './components';
 import { HackProgress } from './components/shared/HackProgress';
 import { InputOverlay } from './components/overlays/InputOverlay';
@@ -190,6 +191,7 @@ function App() {
       }; 
   });
   const [showShop, setShowShop] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   // Load Papers and Folders from Vault (Backend)
   useEffect(() => {
@@ -697,6 +699,10 @@ function App() {
           />
       )}
 
+      <AnimatePresence>
+        {showManual && <ManualOverlay onClose={() => setShowManual(false)} playSfx={playSfx} />}
+      </AnimatePresence>
+
       <LeftPane 
           activeMenu={activeMenu} 
           setActiveMenu={setActiveMenu} 
@@ -707,6 +713,7 @@ function App() {
           onShowStats={() => { setShowStats(true); playSfx('confirm'); }} 
           onShowShop={() => { setShowShop(true); playSfx('confirm'); }}
           onShowMindPalace={() => { setShowMindPalace(true); playSfx('impact'); }}
+          onShowManual={() => { setShowManual(true); playSfx('confirm'); }}
           onSyncConfig={handleSyncConfig}
           onMovePaper={handleMovePaper} // PASS PROP
           playSfx={playSfx} 

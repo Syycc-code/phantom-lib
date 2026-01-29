@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { BookOpen, Plus, Gem, Tag, User, Upload, PlusCircle, BrainCircuit, X, ShoppingBag } from 'lucide-react';
+import { BookOpen, Plus, Gem, Tag, User, Upload, PlusCircle, BrainCircuit, X, ShoppingBag, HelpCircle } from 'lucide-react';
 import type { Folder } from '../../types';
 
 interface LeftPaneProps {
@@ -12,12 +12,13 @@ interface LeftPaneProps {
     onShowStats: () => void;
     onShowShop: () => void;
     onShowMindPalace: () => void;
+    onShowManual: () => void;
     onSyncConfig: () => void; // Kept for backward compat but unused in UI
     onMovePaper: (paperId: number, folderId: string | null) => void; // NEW PROP
     playSfx: (type: any) => void;
 }
 
-const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onShowShop, onShowMindPalace, onSyncConfig, onMovePaper, playSfx }: LeftPaneProps) => {
+const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onShowShop, onShowMindPalace, onShowManual, onSyncConfig, onMovePaper, playSfx }: LeftPaneProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isVelvet = activeMenu === 'velvet';
   const systemItems = [{ icon: BookOpen, label: 'All References', id: 'all' }, { icon: Plus, label: 'Infiltrate (Add)', id: 'add' }, { icon: Gem, label: 'Velvet Room', id: 'velvet' }, { icon: Tag, label: 'Recent', id: 'recent' }];
@@ -32,13 +33,14 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
                 <br/>
                 <span className="text-3xl opacity-60 tracking-widest">ARCHIVE</span>
             </h1>
-            <div className="bg-phantom-yellow text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-2 ml-2 shadow-[2px_2px_0px_#000]">LIB V.2.7</div>
+            <div className="bg-phantom-yellow text-black text-xs font-bold px-2 inline-block transform skew-x-[-12deg] mt-2 ml-2 shadow-[2px_2px_0px_#000]">LIB V.1.0</div>
         </div>
         
         <div className="space-y-2 mb-6">
             <button onClick={() => { onShowStats(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-white text-white p-2 hover:bg-white hover:text-black transition-colors w-full group"><User className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">PHANTOM STATS</span></button>
             <button onClick={() => { onShowShop(); playSfx('click'); }} className="flex items-center space-x-2 bg-zinc-900 border-2 border-phantom-red text-phantom-red p-2 hover:bg-phantom-red hover:text-white transition-colors w-full group"><ShoppingBag className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">BLACK MARKET</span></button>
             <button onClick={() => { onShowMindPalace(); playSfx('click'); }} className="flex items-center space-x-2 bg-black border-2 border-phantom-yellow text-phantom-yellow p-2 hover:bg-phantom-yellow hover:text-black transition-colors w-full group"><BrainCircuit className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">MIND PALACE</span></button>
+            <button onClick={() => { onShowManual(); playSfx('click'); }} className="flex items-center space-x-2 bg-zinc-900 border-2 border-zinc-500 text-zinc-400 p-2 hover:bg-white hover:text-black hover:border-white transition-colors w-full group"><HelpCircle className="group-hover:rotate-12 transition-transform" /><span className="font-p5 text-lg">GUIDEBOOK</span></button>
         </div>
 
         <nav className="space-y-4 z-10 mb-8">
