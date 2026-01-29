@@ -8,6 +8,7 @@ interface MiddlePaneProps {
     selectedId: number | null;
     onSelect: (paper: any) => void;
     onAddPaper: (url: string) => void;
+    onEditPaper: (id: number, data: { title?: string, author?: string }) => void; // NEW PROP
     onDeletePaper: (id: number, e: React.MouseEvent) => void;
     onBulkImport: (files: FileList) => void;
     onBulkDelete: (ids: number[]) => void;
@@ -26,7 +27,7 @@ interface MiddlePaneProps {
 }
 
 // Memoized Paper Row Component to prevent unnecessary re-renders
-const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, toggleFusionSelection, toggleSelection, isVelvet }: any) => {
+const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, toggleFusionSelection, toggleSelection, isVelvet, onEditPaper }: any) => {
     const cardVariants = {
         hidden: { opacity: 0, x: -50, rotateX: 90 },
         visible: (i: number) => ({ 
@@ -72,6 +73,14 @@ const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, to
         // Add a ghost image or effect if desired
     };
 
+    const handleAuthorClick = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent card selection
+        const newAuthor = prompt("UPDATE ENTITY TAG (AUTHOR):", paper.author);
+        if (newAuthor && newAuthor !== paper.author) {
+            onEditPaper(paper.id, { author: newAuthor });
+        }
+    };
+
     return (
         <motion.div 
             layoutId={`paper-${paper.id}`} // Keeps layout stable
@@ -100,7 +109,15 @@ const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, to
                     <h3 className="font-p5 text-2xl tracking-wide line-clamp-1">{paper.title}</h3>
                     <div className="flex items-center space-x-2 mt-2 opacity-80 font-mono text-xs">
                         <span className="bg-white/20 px-1">{paper.year}</span>
-                        <span>// {paper.author}</span>
+                        {/* 标签化作者名，未来可扩展为点击编辑 */}
+                        <span 
+                            onClick={handleAuthorClick}
+                            className="px-2 py-0.5 border border-white/30 rounded-sm hover:bg-white/10 transition-colors z-20 flex items-center gap-1"
+                            title="Click to Edit Entity Tag"
+                        >
+                            <span className="opacity-50 text-[10px]">TAG:</span>
+                            {paper.author === "Unknown Author" || paper.author === "Unknown Entity" ? "UNTAGGED" : paper.author}
+                        </span>
                     </div>
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -115,13 +132,14 @@ const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, to
     // Custom comparison for performance
     return (
         prev.paper.id === next.paper.id && 
+        prev.paper.author === next.paper.author && // Check author change
         prev.isSelected === next.isSelected &&
         prev.isSelectionMode === next.isSelectionMode && 
         prev.isVelvet === next.isVelvet
     );
 });
 
-const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onBulkImport, onBulkDelete, onMovePaper, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx, requestConfirm }: MiddlePaneProps) => {
+const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onEditPaper, onBulkImport, onBulkDelete, onMovePaper, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx, requestConfirm }: MiddlePaneProps) => {
     const [inputUrl, setInputUrl] = useState('');
     const [isStealing, setIsStealing] = useState(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -239,6 +257,7 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                                 toggleFusionSelection={toggleFusionSelection}
                                 toggleSelection={toggleSelection}
                                 isVelvet={isVelvet}
+                                onEditPaper={onEditPaper}
                             />
                         );
                     })}

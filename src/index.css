@@ -7,8 +7,9 @@
   --color-phantom-yellow: var(--phantom-yellow);
   --animate-spin-slow: spin 3s linear infinite;
   
-  --font-p5: "Fjalla One", sans-serif;
-  --font-body: "Inter", sans-serif;
+  /* 修复字体栈：Fjalla One 仅用于英文标题，正文使用系统字体栈以支持中文 */
+  --font-p5: "Fjalla One", "Impact", "Arial Black", sans-serif;
+  --font-body: "Inter", "Microsoft YaHei", "PingFang SC", "WenQuanYi Micro Hei", sans-serif;
 }
 
 /* Import Fonts - Moved to top */
@@ -17,7 +18,7 @@
   --phantom-red: #E60012; /* Default Red */
   --phantom-yellow: #FCEC0C; /* Default Yellow */
   
-  font-family: var(--font-body);
+  font-family: var(--font-body); /* 默认使用支持中文的字体 */
   line-height: 1.5;
   color-scheme: dark;
   color: #E0E0E0; /* Default P5 Text Color */
@@ -123,4 +124,122 @@ body {
   100% {
     transform: translateX(500%);
   }
+}
+
+/* HTML Content Styling (for Translated Tables/Lists) */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+
+.prose th, .prose td {
+  border: 1px solid #444;
+  padding: 8px;
+  text-align: left;
+}
+
+.prose th {
+  background-color: rgba(255, 255, 255, 0.1);
+  font-weight: bold;
+}
+
+.mode-safe .prose th, .mode-safe .prose td {
+  border-color: #ccc;
+}
+
+.mode-safe .prose th {
+  background-color: #f0f0f0;
+}
+
+.prose h3, .prose h4 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-family: var(--font-body); /* 标题也改用通用字体，防止中文乱码 */
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.prose code {
+  background: rgba(255,255,255,0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: "JetBrains Mono", "Consolas", "Courier New", monospace; /* 优化代码字体 */
+}
+
+.prose ul, .prose ol {
+  padding-left: 1.5em;
+  margin: 1em 0;
+}
+
+.prose li {
+  margin-bottom: 0.5em;
+}
+
+.prose b, .prose strong {
+  color: #E60012; /* 白底黑字模式下，重点色回归 Phantom Red */
+  text-shadow: none;
+}
+
+.prose {
+  color: #111; /* 纯黑文字 */
+  line-height: 1.8;
+}
+
+/* 强制覆盖 ReaderOverlay 的背景色 */
+.reader-light-mode {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+/* 动态字体应用 */
+.reader-light-mode.font-serif .prose {
+  font-family: "Times New Roman", "SimSun", serif;
+}
+
+.reader-light-mode.font-mono .prose {
+  font-family: "Courier New", "Consolas", monospace;
+}
+
+.reader-light-mode.font-default .prose {
+  font-family: var(--font-body);
+}
+
+.reader-light-mode .prose code {
+  background: #f0f0f0;
+  color: #d63384;
+  border: 1px solid #ddd;
+}
+
+.reader-light-mode .prose th {
+  background-color: #f8f9fa;
+  color: #000;
+  border-color: #dee2e6;
+}
+
+.reader-light-mode .prose td {
+  border-color: #dee2e6;
+}
+
+/* Safe Mode (浅色模式) 下的样式覆盖 */
+.mode-safe .prose {
+  color: #222; /* 浅色模式文本：深灰 */
+}
+
+.mode-safe .prose b, .mode-safe .prose strong {
+  color: #000; /* 浅色模式粗体：纯黑 */
+  font-weight: 900;
+}
+
+.prose code {
+  background: rgba(255,255,255,0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.mode-safe .prose code {
+  background: #eee;
+  color: #d63384;
 }

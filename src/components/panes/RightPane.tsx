@@ -10,15 +10,24 @@ interface RightPaneProps {
     onRead: () => void;
     playSfx: (type: any) => void;
     onSaveNote: (content: string) => Promise<void>;
+    onEditPaper?: (id: number, data: { title?: string, author?: string }) => void; // NEW PROP
 }
 
-const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote }: RightPaneProps) => {
+const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote, onEditPaper }: RightPaneProps) => {
   const [analyzing, setAnalyzing] = useState(false);
   
   const handleAnalyze = async () => { 
       setAnalyzing(true); 
       await onAnalyze(); 
       setAnalyzing(false); 
+  };
+
+  const handleAuthorClick = () => {
+      if (!onEditPaper) return;
+      const newAuthor = prompt("UPDATE ENTITY TAG (AUTHOR):", paper.author);
+      if (newAuthor && newAuthor !== paper.author) {
+          onEditPaper(paper.id, { author: newAuthor });
+      }
   };
 
   return (
@@ -53,7 +62,14 @@ const RightPane = ({ paper, onClose, onAnalyze, onRead, playSfx, onSaveNote }: R
                             <div className="border-b-2 border-black pb-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex space-x-4 font-mono text-sm">
-                                        <div className="bg-black text-white px-3 py-1 transform -skew-x-12">AUTH: {paper.author}</div>
+                                        <div 
+                                            onClick={handleAuthorClick}
+                                            className={`bg-black text-white px-3 py-1 transform -skew-x-12 cursor-pointer hover:bg-phantom-red transition-colors flex items-center gap-2`}
+                                            title="Click to Edit"
+                                        >
+                                            <span className="opacity-50 text-[10px]">TAG:</span>
+                                            {paper.author === "Unknown Author" || paper.author === "Unknown Entity" ? "UNTAGGED" : paper.author}
+                                        </div>
                                         <div className="bg-black text-white px-3 py-1 transform -skew-x-12">TYPE: {paper.type}</div>
                                     </div>
                                     <div className="flex space-x-2">

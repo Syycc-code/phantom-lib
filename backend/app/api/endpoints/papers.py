@@ -25,6 +25,8 @@ class TranslatePageRequest(BaseModel):
 
 import json
 
+import asyncio
+
 @router.post("/papers/{paper_id}/translate_page")
 async def translate_paper_page(
     paper_id: int, 
@@ -50,33 +52,71 @@ async def translate_paper_page(
         # Return empty block list for consistency
         return {"blocks": [{"src": "", "dst": "⚠️ 此页面没有文本。"}]}
         
-    try:
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPTS["MIND_HACK_TRANSLATE_JSON"]},
-                {"role": "user", "content": text}
-            ],
-            stream=False,
-            timeout=60.0
-        )
-        content = response.choices[0].message.content.strip()
+    # --- OPTIMIZATION: CHUNK & PARALLEL ---
+    # 1. Split text into manageable chunks (approx 1000 chars) to allow parallel processing
+    # Naive split by paragraphs (double newline) first
+    raw_paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+    
+    # Regroup into chunks
+    chunks = []
+    current_chunk = ""
+    for p in raw_paragraphs:
+        # Reduced chunk size to 1000 to prevent output truncation
+        if len(current_chunk) + len(p) > 1000:
+            chunks.append(current_chunk)
+            current_chunk = p
+        else:
+            current_chunk += "\n\n" + p if current_chunk else p
+    if current_chunk:
+        chunks.append(current_chunk)
         
-        # Safe JSON parsing
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.endswith("```"):
-            content = content[:-3]
-        
+    # If text was too short or weirdly formatted, just use whole text
+    if not chunks: 
+        chunks = [text]
+
+    # 2. Define async worker for a single chunk
+    async def translate_chunk(chunk_text: str) -> List[dict]:
+        if not chunk_text.strip(): return []
         try:
-            blocks = json.loads(content)
-        except json.JSONDecodeError:
-            # Fallback for malformed JSON
-            blocks = [{"src": text, "dst": content}]
+            response = await deepseek_client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPTS["MIND_HACK_TRANSLATE_JSON"]},
+                    {"role": "user", "content": chunk_text}
+                ],
+                stream=False,
+                timeout=90.0, # Increased timeout
+                max_tokens=4096 # Explicitly allow long outputs
+            )
+            content = response.choices[0].message.content.strip()
             
-        return {"blocks": blocks}
-    except Exception as e:
-        return {"blocks": [{"src": text, "dst": f"Translation Failed: {str(e)}"}]}
+            # Safe JSON parsing
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            
+            try:
+                data = json.loads(content)
+                if isinstance(data, list):
+                    return data
+                return [{"src": chunk_text, "dst": content}] # Fallback if not list
+            except json.JSONDecodeError:
+                # Fallback for malformed JSON
+                return [{"src": chunk_text, "dst": content}]
+        except Exception as e:
+            print(f"[TRANSLATE ERROR] {e}")
+            return [{"src": chunk_text, "dst": f"[Translation Failed: {str(e)}]"}]
+
+    # 3. Run in parallel
+    results = await asyncio.gather(*[translate_chunk(c) for c in chunks])
+    
+    # 4. Flatten results
+    final_blocks = []
+    for r in results:
+        final_blocks.extend(r)
+            
+    return {"blocks": final_blocks}
 
 
 class UrlUploadRequest(BaseModel):

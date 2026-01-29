@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingBag, Lock, Check, AlertTriangle, Palette, Music, Sparkles, Trash2, MessageSquare, BrainCircuit, Monitor } from 'lucide-react';
+import { X, ShoppingBag, Lock, Check, AlertTriangle, Palette, Music, Sparkles, Trash2, MessageSquare, BrainCircuit, Monitor, Type } from 'lucide-react';
 import type { PhantomStats, PlaySoundFunction } from '../../types';
 
 interface ShopOverlayProps {
     stats: PhantomStats;
     inventory: string[];
-    equipped: { theme: string, effect_monitor: string, effect_im: string, effect_marker: string };
+    equipped: { theme: string, effect_monitor: string, effect_im: string, effect_marker: string, font_style?: string };
     onClose: () => void;
     onPurchase: (item: ShopItem) => void;
     onEquip: (item: ShopItem) => void;
@@ -17,7 +17,7 @@ interface ShopOverlayProps {
 export type ShopItem = {
     id: string;
     name: string;
-    type: 'THEME' | 'SFX' | 'EFFECT';
+    type: 'THEME' | 'SFX' | 'EFFECT' | 'FONT';
     desc: string;
     cost: number;
     currency: keyof PhantomStats;
@@ -25,6 +25,7 @@ export type ShopItem = {
 };
 
 export const SHOP_ITEMS: ShopItem[] = [
+    // ... (Previous items)
     {
         id: 'theme_default',
         name: 'PHANTOM RED',
@@ -34,6 +35,36 @@ export const SHOP_ITEMS: ShopItem[] = [
         currency: 'guts',
         value: '#E60012'
     },
+    // ...
+    // --- FONTS ---
+    {
+        id: 'font_default',
+        name: 'SYSTEM DEFAULT',
+        type: 'FONT',
+        desc: 'Standard legible sans-serif font (Inter/YaHei).',
+        cost: 0,
+        currency: 'knowledge',
+        value: 'default'
+    },
+    {
+        id: 'font_serif',
+        name: 'ACADEMIC SERIF',
+        type: 'FONT',
+        desc: 'Classic serif font for a book-like reading experience.',
+        cost: 2,
+        currency: 'knowledge',
+        value: 'serif'
+    },
+    {
+        id: 'font_mono',
+        name: 'CODER MONO',
+        type: 'FONT',
+        desc: 'Monospace font for code-heavy papers.',
+        cost: 2,
+        currency: 'proficiency',
+        value: 'mono'
+    },
+    // ...
     {
         id: 'theme_royal',
         name: 'ROYAL GOLD',
@@ -133,7 +164,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
     const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
     const [confirming, setConfirming] = useState(false);
-    const [activeTab, setActiveTab] = useState<'ALL' | 'THEMES' | 'GADGETS' | 'TOOLS'>('ALL');
+    const [activeTab, setActiveTab] = useState<'ALL' | 'THEMES' | 'GADGETS' | 'TOOLS' | 'FONTS'>('ALL');
 
     // Prioritize hover item, then selected item
     const activeDisplayItem = hoveredItem || selectedItem;
@@ -143,6 +174,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
         if (activeTab === 'THEMES') return item.type === 'THEME';
         if (activeTab === 'GADGETS') return item.id.startsWith('visualizer_') || item.id.startsWith('radar_') || item.id.startsWith('skin_');
         if (activeTab === 'TOOLS') return item.id.startsWith('marker_');
+        if (activeTab === 'FONTS') return item.type === 'FONT';
         return true;
     });
 
@@ -162,11 +194,12 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
         else if (selectedItem.id.startsWith('visualizer_') || selectedItem.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === selectedItem.value;
         else if (selectedItem.id.startsWith('skin_')) isEquipped = equipped.effect_im === selectedItem.value;
         else if (selectedItem.id.startsWith('marker_')) isEquipped = equipped.effect_marker === selectedItem.value;
+        else if (selectedItem.type === 'FONT') isEquipped = equipped.font_style === selectedItem.value;
 
         if (isOwned) {
             if (isEquipped) {
-                // Unequip Logic (Only for non-themes)
-                if (selectedItem.type !== 'THEME') {
+                // Unequip Logic (Only for non-themes and non-default fonts)
+                if (selectedItem.type !== 'THEME' && selectedItem.value !== 'default') {
                     onUnequip(selectedItem);
                     playSfx('cancel'); // Sound for unequip
                 }
@@ -223,7 +256,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
 
                     {/* CATEGORY TABS */}
                     <div className="relative z-10 px-8 py-4 flex flex-col space-y-2">
-                        {['ALL', 'THEMES', 'GADGETS', 'TOOLS'].map((tab) => (
+                        {['ALL', 'THEMES', 'FONTS', 'GADGETS', 'TOOLS'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => { setActiveTab(tab as any); playSfx('click'); }}
@@ -277,6 +310,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
                         {[
                             { id: 'THEME', label: 'UI THEMES', icon: Palette, filter: (i: ShopItem) => i.type === 'THEME' },
+                            { id: 'FONT', label: 'TYPOGRAPHY', icon: Type, filter: (i: ShopItem) => i.type === 'FONT' },
                             { id: 'SYSTEM', label: 'SYSTEM MODULES', icon: Sparkles, filter: (i: ShopItem) => ['visualizer_', 'radar_'].some(p => i.id.startsWith(p)) },
                             { id: 'IM', label: 'COMMUNICATION', icon: MessageSquare, filter: (i: ShopItem) => i.id.startsWith('skin_') },
                             { id: 'TOOLS', label: 'COGNITIVE TOOLS', icon: BrainCircuit, filter: (i: ShopItem) => i.id.startsWith('marker_') },
@@ -298,6 +332,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                             else if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === item.value;
                                             else if (item.id.startsWith('skin_')) isEquipped = equipped.effect_im === item.value;
                                             else if (item.id.startsWith('marker_')) isEquipped = equipped.effect_marker === item.value;
+                                            else if (item.type === 'FONT') isEquipped = equipped.font_style === item.value;
 
                                             const isSelected = selectedItem?.id === item.id;
                                             const isHovered = hoveredItem?.id === item.id;
@@ -323,6 +358,7 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                                         <div className="flex items-center gap-2">
                                                             {item.type === 'THEME' && <Palette size={16} />}
                                                             {item.type === 'EFFECT' && <Sparkles size={16} />}
+                                                            {item.type === 'FONT' && <Type size={16} />}
                                                             <h3 className={`font-p5 text-xl ${isSelected ? 'text-black' : 'text-white'}`}>
                                                                 {item.name}
                                                             </h3>
@@ -386,9 +422,12 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                     inventory.includes(selectedItem.id) ? (
                                         <button 
                                             onClick={handleAction}
-                                            disabled={selectedItem.type === 'THEME' && equipped.theme === selectedItem.id}
+                                            disabled={
+                                                (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) ||
+                                                (selectedItem.type === 'FONT' && equipped.font_style === selectedItem.value)
+                                            }
                                             className={`px-8 py-3 font-p5 text-xl uppercase tracking-widest transition-all flex items-center gap-2 ${
-                                                (selectedItem.type === 'THEME' && equipped.theme === selectedItem.id)
+                                                ((selectedItem.type === 'THEME' && equipped.theme === selectedItem.id) || (selectedItem.type === 'FONT' && equipped.font_style === selectedItem.value))
                                                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                                     : 'bg-white text-black hover:bg-phantom-red hover:text-white'
                                             }`}
@@ -397,8 +436,9 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                                              (selectedItem.id.startsWith('visualizer_') && equipped.effect_monitor === selectedItem.value) ||
                                              (selectedItem.id.startsWith('radar_') && equipped.effect_monitor === selectedItem.value) ||
                                              (selectedItem.id.startsWith('skin_') && equipped.effect_im === selectedItem.value) ||
-                                             (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value)
-                                                ? (selectedItem.type === 'THEME' ? "EQUIPPED" : <>UNEQUIP <Trash2 size={16} /></>) 
+                                             (selectedItem.id.startsWith('marker_') && equipped.effect_marker === selectedItem.value) ||
+                                             (selectedItem.type === 'FONT' && equipped.font_style === selectedItem.value)
+                                                ? (selectedItem.type === 'THEME' || selectedItem.type === 'FONT' ? "EQUIPPED" : <>UNEQUIP <Trash2 size={16} /></>) 
                                                 : "EQUIP NOW"}
                                         </button>
                                     ) : (

@@ -180,14 +180,15 @@ function App() {
   
   // Shop State
   const [inventory, setInventory] = useState<string[]>(() => { const saved = localStorage.getItem('phantom_inventory'); return saved ? JSON.parse(saved) : ['theme_default']; });
-  const [equipped, setEquipped] = useState<{theme: string, effect_monitor: string, effect_im: string, effect_marker: string}>(() => { 
+  const [equipped, setEquipped] = useState<{theme: string, effect_monitor: string, effect_im: string, effect_marker: string, font_style: string}>(() => { 
       const saved = localStorage.getItem('phantom_equipped'); 
       const parsed = saved ? JSON.parse(saved) : {};
       return { 
           theme: parsed.theme || 'theme_default',
           effect_monitor: parsed.effect_monitor || 'default',
           effect_im: parsed.effect_im || 'default',
-          effect_marker: parsed.effect_marker || 'default'
+          effect_marker: parsed.effect_marker || 'default',
+          font_style: parsed.font_style || 'default'
       }; 
   });
   const [showShop, setShowShop] = useState(false);
@@ -277,7 +278,7 @@ function App() {
   }, [isReading]);
 
   // --- HANDLERS (MEMOIZED) ---
-  const handleSelectPaper = useCallback((p: Paper) => {
+  const handlePaperSelect = useCallback((p: Paper) => { // Renamed from handleSelectPaper to match prop usage
       setSelectedPaper(p);
       playSfx('click');
   }, [playSfx]);
@@ -483,27 +484,38 @@ function App() {
   };
 
   const handleSaveNote = async (content: string) => {
-      if (!selectedPaper) return;
+      if (!readingPaper) return;
       try {
-          const res = await fetch(`/api/papers/${selectedPaper.id}/notes`, {
+          const res = await fetch(`/api/papers/${readingPaper.id}/notes`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ content })
           });
-          
           if (res.ok) {
-              // Optimistic Update
-              setPapers(prev => prev.map(p => 
-                  p.id === selectedPaper.id ? { ...p, user_notes: content } : p
-              ));
-              // Update selectedPaper too to sync state
-              setSelectedPaper(prev => prev ? { ...prev, user_notes: content } : null);
-          } else {
-              throw new Error("Save failed");
+              setPapers(prev => prev.map(p => p.id === readingPaper.id ? { ...p, user_notes: content } : p));
           }
       } catch (e) {
-          console.error("Note Save Error", e);
-          throw e; // Let NoteEditor handle UI error state
+          console.error("Failed to save note", e);
+      }
+  };
+
+  const handleEditPaper = async (id: number, data: { title?: string, author?: string }) => {
+      try {
+          const res = await fetch(`/api/papers/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data)
+          });
+          if (res.ok) {
+              const updatedPaper = await res.json();
+              setPapers(prev => prev.map(p => p.id === id ? updatedPaper : p));
+              playSfx('confirm');
+          } else {
+              playSfx('cancel');
+          }
+      } catch (e) {
+          console.error("Failed to update paper", e);
+          playSfx('cancel');
       }
   };
 
@@ -645,6 +657,7 @@ function App() {
           if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) next.effect_monitor = item.value || 'default';
           if (item.id.startsWith('skin_')) next.effect_im = item.value || 'default';
           if (item.id.startsWith('marker_')) next.effect_marker = item.value || 'default';
+          if (item.type === 'FONT') next.font_style = item.value || 'default';
           return next;
       });
   };
@@ -658,6 +671,7 @@ function App() {
           if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) next.effect_monitor = 'default';
           if (item.id.startsWith('skin_')) next.effect_im = 'default';
           if (item.id.startsWith('marker_')) next.effect_marker = 'default';
+          if (item.type === 'FONT') next.font_style = 'default';
           return next;
       });
   };
@@ -719,28 +733,29 @@ function App() {
           playSfx={playSfx} 
       />
       <div className="flex-1 flex relative">
-        <MiddlePane 
-            activeMenu={activeMenu} 
-            papers={papers} 
-            selectedId={selectedPaper?.id || null} 
-            onSelect={handleSelectPaper} 
-            onAddPaper={handleAddPaper} 
-            onDeletePaper={handleDeletePaper} 
-            onBulkImport={handleBulkImport}
-            onBulkDelete={handleBulkDelete}
-            onMovePaper={handleMovePaper} 
-            toggleFusionSelection={toggleFusionSelection}
-            fusionTargetIds={fusionTargetIds}
-            isFusing={isFusing}
-            setIsFusing={setIsFusing}
-            setFusionResult={setFusionResult}
-            fusionResult={fusionResult}
-            showCurtain={showCurtain}
-            setShowCurtain={setShowCurtain}
-            onLevelUp={handleLevelUp}
-            playSfx={playSfx}
-            requestConfirm={requestConfirm} // NEW PROP
-        />
+          <MiddlePane 
+              activeMenu={activeMenu}
+              papers={papers}
+              selectedId={readingPaper?.id || null}
+              onSelect={handlePaperSelect}
+              onAddPaper={handleAddPaper}
+              onDeletePaper={handleDeletePaper}
+              onEditPaper={handleEditPaper} // NEW PROP
+              onBulkImport={handleBulkImport}
+              onBulkDelete={handleBulkDelete}
+              onMovePaper={handleMovePaper}
+              toggleFusionSelection={toggleFusionSelection}
+              fusionTargetIds={fusionTargetIds}
+              isFusing={isFusing}
+              setIsFusing={setIsFusing}
+              setFusionResult={setFusionResult}
+              fusionResult={fusionResult}
+              showCurtain={showCurtain}
+              setShowCurtain={setShowCurtain}
+              onLevelUp={handleLevelUp}
+              playSfx={playSfx}
+              requestConfirm={requestConfirm}
+          />
       </div>
       <div className="relative">
          <RightPane 
@@ -750,6 +765,7 @@ function App() {
             onRead={() => handleRead()} 
             playSfx={playSfx}
             onSaveNote={handleSaveNote}
+            onEditPaper={handleEditPaper} // Pass handleEditPaper
          />
       </div>
         {inputOverlay.show && (
@@ -778,7 +794,7 @@ function App() {
             </AnimatePresence>
         )}
       <AnimatePresence>
-        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} />}
+        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} fontStyle={equipped.font_style} />}
         {showMindPalace && <MindPalace papers={papers} onClose={() => setShowMindPalace(false)} onRead={handleRead} playSfx={playSfx} />}
         {fusionResult && fusionTargetIds.length === 2 && (
             <FusionWorkspace 

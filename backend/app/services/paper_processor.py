@@ -19,7 +19,7 @@ async def process_paper(
     filename: str,
     session: Session,
     title: Optional[str] = None,
-    author: str = "Unknown Entity",
+    author: str = "Unknown Author", # Changed from Unknown Entity
     year: str = "2025",
     url: Optional[str] = None
 ) -> Paper:

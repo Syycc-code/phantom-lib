@@ -27,6 +27,7 @@ interface ReaderOverlayProps {
     playSfx: PlaySoundFunction;
     onSaveNote: (content: string) => Promise<void>;
     markerStyle?: string; // 'default', 'neon', 'redact'
+    fontStyle?: string; // NEW PROP
 }
 
 interface TranslationBlock {
@@ -39,7 +40,7 @@ interface TranslationData {
     status: 'pending' | 'loading' | 'success' | 'error';
 }
 
-export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, markerStyle = 'default' }: ReaderOverlayProps) => {
+export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, markerStyle = 'default', fontStyle = 'default' }: ReaderOverlayProps) => {
     const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; x: number; y: number; text: string } | null>(null);
     const [analysisResult, setAnalysisResult] = useState<{ visible: boolean; type: string; content: string } | null>(null);
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
@@ -93,6 +94,8 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
 
         const processQueue = async () => {
             const CONCURRENT_LIMIT = 3;
+            // FIX: Load ALL pages, not just the first few.
+            // Filter pages that haven't been loaded or failed
             const pagesToLoad = Array.from({ length: numPages }, (_, i) => i + 1)
                 .filter(p => !translations[p] || translations[p].status === 'error');
 
@@ -283,70 +286,46 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className={`fixed inset-0 z-[100] flex flex-col transition-colors duration-500 ${
-                safeMode ? 'mode-safe bg-[#EAE8DC] text-[#222]' : 'bg-[#050505] text-white'
-            }`}
+            className={`fixed inset-0 z-[100] flex flex-col transition-colors duration-500 bg-white text-black reader-light-mode font-${fontStyle}`}
         >
             <style>{`
                 .clip-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
                 .animate-spin-slow { animation: spin 4s linear infinite; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
                 
-                /* DYNAMIC SELECTION STYLES */
-                ${markerStyle === 'neon' ? `
-                    ::selection {
-                        background: #00ff00;
-                        color: black;
-                        text-shadow: 0 0 5px #00ff00;
-                    }
-                ` : markerStyle === 'redact' ? `
-                    ::selection {
-                        background: #000;
-                        color: transparent;
-                    }
-                ` : `
-                    ::selection {
-                        background: #E60012; /* Phantom Red Default */
-                        color: white;
-                    }
-                `}
+                /* DYNAMIC SELECTION STYLES - Light Mode Optimized */
+                ::selection {
+                    background: #E60012; /* Phantom Red */
+                    color: white;
+                }
             `}</style>
 
-            {/* HEADER */}
-            <div className={`h-20 flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-lg z-20 transition-colors duration-500 ${
-                safeMode ? 'bg-[#D4CFC0]' : 'bg-phantom-red'
-            }`}>
-                <div className={`absolute inset-0 opacity-20 mix-blend-overlay ${safeMode ? '' : 'bg-halftone'}`} />
+            {/* HEADER - Light Mode Style */}
+            <div className={`h-20 flex items-center justify-between px-8 shrink-0 relative overflow-hidden shadow-sm z-20 border-b-2 border-black bg-white`}>
                 <div className="z-10 flex items-center space-x-4">
-                    <Maximize2 className={safeMode ? 'text-[#4A4A4A]' : 'text-black'} />
-                    <h2 className={`font-p5 text-3xl truncate max-w-xl transform -skew-x-12 ${
-                        safeMode ? 'text-[#4A4A4A]' : 'text-black'
-                    }`}>
+                    <Maximize2 className="text-black" />
+                    <h2 className="font-p5 text-3xl truncate max-w-xl text-black">
                         READING // {paper.title}
                     </h2>
                 </div>
                 <div className="flex items-center space-x-4 z-10">
-                    <button onClick={() => { setSplitMode(!splitMode); playSfx('click'); }} className={`px-4 py-2 font-p5 text-sm border-2 rounded-full flex items-center space-x-2 ${safeMode ? (splitMode ? 'bg-[#8C8C8C] text-white' : 'bg-white text-black border-[#4A4A4A]') : (splitMode ? 'bg-black text-phantom-yellow border-phantom-yellow' : 'bg-white text-black border-white hover:bg-black hover:text-white')}`}>
+                    <button onClick={() => { setSplitMode(!splitMode); playSfx('click'); }} className={`px-4 py-2 font-p5 text-sm border-2 border-black rounded-full flex items-center space-x-2 ${splitMode ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-100'}`}>
                         <Languages size={16} /> <span>TRANSLATE</span>
                     </button>
-                    <button onClick={() => { setSafeMode(!safeMode); playSfx('click'); }} className={`px-4 py-2 font-p5 text-sm border-2 rounded-full flex items-center space-x-2 ${safeMode ? 'bg-[#4A4A4A] text-white border-[#4A4A4A]' : 'bg-white text-black border-white'}`}>
-                        <Eye size={16} /> <span>{safeMode ? 'HEIST' : 'SAFE'}</span>
-                    </button>
-                    <button onClick={() => onClose()} className={`p-3 rounded-full border-2 ${safeMode ? 'bg-[#4A4A4A] text-white border-white' : 'bg-black text-white border-white'}`}><X size={24} /></button>
+                    {/* Removed Safe Mode Toggle since it's now always safe/light */}
+                    <button onClick={() => onClose()} className="p-3 rounded-full border-2 border-black bg-white text-black hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"><X size={24} /></button>
                 </div>
             </div>
 
             {/* CONTENT */}
-            <div className="flex-1 flex overflow-hidden relative w-full">
-                {/* LEFT PDF */}
+            <div className="flex-1 flex overflow-hidden relative w-full bg-white">
+                {/* LEFT PDF - Light Mode Background */}
                 <div 
                     ref={containerRef}
                     onMouseEnter={() => activeDriver.current = 'left'}
                     onScroll={() => handleScroll('left')}
                     style={{ width: splitMode ? `${splitRatio * 100}%` : '100%' }}
-                    className={`relative overflow-auto flex flex-col items-center p-8 custom-scrollbar transition-all duration-100 ${
-                        safeMode ? 'bg-[#F5F3ED]' : 'bg-zinc-900'
-                    }`} 
+                    className="relative overflow-auto flex flex-col items-center p-8 custom-scrollbar bg-[#F5F5F5]" 
                     onMouseUp={handleMouseUp}
                 >
                     {paper.fileUrl && (
@@ -358,31 +337,31 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                                     ref={el => { pageRefs.current[index] = el; }}
                                     className="relative w-full flex justify-center"
                                 >
-                                    <Page pageNumber={index + 1} renderTextLayer={true} renderAnnotationLayer={true} width={splitMode ? (containerRef.current ? containerRef.current.offsetWidth * 0.9 : 500) : undefined} scale={splitMode ? undefined : 1.2} className="bg-white shadow-xl max-w-full" loading={<PhantomLoader message="DECRYPTING" />} />
-                                    <div className={`absolute -left-8 top-0 text-xs font-mono opacity-50 ${safeMode ? 'text-black' : 'text-white'}`}>{index + 1}</div>
+                                    <Page pageNumber={index + 1} renderTextLayer={true} renderAnnotationLayer={true} width={splitMode ? (containerRef.current ? containerRef.current.offsetWidth * 0.9 : 500) : undefined} scale={splitMode ? undefined : 1.2} className="bg-white shadow-lg border border-gray-200 max-w-full" loading={<PhantomLoader message="DECRYPTING" />} />
+                                    <div className="absolute -left-8 top-0 text-xs font-mono opacity-50 text-black">{index + 1}</div>
                                 </div>
                             ))}
                         </Document>
                     )}
                 </div>
 
-                {splitMode && <div className="w-2 bg-black hover:bg-phantom-red cursor-col-resize flex items-center justify-center z-50 transition-colors" onMouseDown={handleMouseDown}><GripVertical size={16} className="text-white" /></div>}
+                {splitMode && <div className="w-2 bg-gray-200 hover:bg-phantom-red cursor-col-resize flex items-center justify-center z-50 transition-colors border-l border-r border-gray-300" onMouseDown={handleMouseDown}><GripVertical size={16} className="text-gray-500" /></div>}
 
-                {/* RIGHT TRANSLATION */}
+                {/* RIGHT TRANSLATION - Light Mode Background */}
                 <AnimatePresence>
                     {splitMode && (
                         <motion.div 
                             initial={{ x: "100%", width: 0 }}
                             animate={{ x: 0, width: `${(1 - splitRatio) * 100}%` }}
                             exit={{ x: "100%", width: 0 }}
-                            className={`h-full border-l-4 border-black flex flex-col ${safeMode ? 'bg-white' : 'bg-zinc-900'}`}
+                            className="h-full border-l-2 border-black flex flex-col bg-white"
                         >
-                            <div className="bg-black text-white p-4 flex items-center justify-between shadow-lg z-10 shrink-0">
-                                <div className="flex items-center space-x-4"><Languages className="text-phantom-yellow" /><h3 className="font-p5 text-xl tracking-wider hidden lg:block">COGNITIVE TRANSLATION</h3></div>
-                                <span className="font-mono text-sm text-phantom-yellow animate-pulse">SYNC: PAGE {activePage}</span>
+                            <div className="bg-white border-b-2 border-black text-black p-4 flex items-center justify-between shadow-sm z-10 shrink-0">
+                                <div className="flex items-center space-x-4"><Languages className="text-phantom-red" /><h3 className="font-p5 text-xl tracking-wider hidden lg:block">COGNITIVE TRANSLATION</h3></div>
+                                <span className="font-mono text-sm text-gray-500">SYNC: PAGE {activePage}</span>
                             </div>
 
-                            <div ref={rightPanelRef} onMouseEnter={() => activeDriver.current = 'right'} onScroll={() => handleScroll('right')} className={`flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12 ${safeMode ? 'text-gray-800' : 'text-gray-200'}`}>
+                            <div ref={rightPanelRef} onMouseEnter={() => activeDriver.current = 'right'} onScroll={() => handleScroll('right')} className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12 text-gray-900 bg-white">
                                 {numPages > 0 ? (
                                     Array.from(new Array(numPages), (_, index) => {
                                         const pageNum = index + 1;
@@ -393,7 +372,7 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                                                 ref={el => { translationRefs.current[index] = el; }}
                                                 className={`min-h-[50vh] transition-opacity duration-500 border-l-2 pl-4 ${activePage === pageNum ? 'border-phantom-red opacity-100' : 'border-transparent opacity-40 hover:opacity-80'}`}
                                             >
-                                                <div className="flex items-center space-x-4 mb-4 select-none"><span className={`font-p5 text-xl ${activePage === pageNum ? 'text-phantom-red' : 'text-gray-500'}`}>#{pageNum}</span></div>
+                                                <div className="flex items-center space-x-4 mb-4 select-none"><span className={`font-p5 text-xl ${activePage === pageNum ? 'text-phantom-red' : 'text-gray-400'}`}>#{pageNum}</span></div>
                                                 
                                                 {data?.status === 'success' ? (
                                                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
@@ -403,33 +382,43 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                                                             // MARKER EFFECTS
                                                             let effectClass = "p-2 rounded transition-all duration-300 ";
                                                             if (isHighlighted) {
-                                                                if (markerStyle === 'neon') {
-                                                                    effectClass += "bg-black text-green-400 shadow-[0_0_15px_#00ff00] border border-green-500 font-mono scale-[1.05] z-10 relative";
-                                                                } else if (markerStyle === 'redact') {
-                                                                    effectClass += "bg-black text-transparent hover:text-white cursor-help border border-black select-none";
-                                                                } else {
-                                                                    effectClass += "bg-phantom-yellow text-black shadow-lg scale-[1.02] z-10 relative";
-                                                                }
+                                                                 effectClass += "bg-phantom-yellow text-black shadow-sm border border-black scale-[1.02] z-10 relative";
                                                             } else {
-                                                                effectClass += "hover:bg-white/5";
+                                                                effectClass += "hover:bg-gray-100";
                                                             }
+
+                                                            const formatContent = (content: string) => {
+                                                                // Simple check if content has HTML tags
+                                                                if (/<[a-z][\s\S]*>/i.test(content)) {
+                                                                    return content;
+                                                                }
+                                                                // If plain text, convert newlines to breaks
+                                                                return content.replace(/\n/g, '<br/>');
+                                                            };
 
                                                             return (
                                                                 <div key={idx} className={effectClass}>
-                                                                    <p className="font-serif text-lg leading-loose">
-                                                                        {block.dst}
-                                                                    </p>
+                                                                    <div 
+                                                                        className="font-serif text-lg leading-loose prose prose-invert max-w-none text-black"
+                                                                        dangerouslySetInnerHTML={{ __html: formatContent(block.dst) }}
+                                                                    />
                                                                 </div>
                                                             );
                                                         })}
                                                     </div>
                                                 ) : data?.status === 'loading' ? (
                                                     <div className="flex flex-col items-center justify-center h-32 space-y-4">
-                                                        <P5Star />
-                                                        <p className="font-p5 tracking-widest text-sm animate-pulse">DECODING REALITY...</p>
+                                                        <div className="relative w-16 h-16 animate-spin-slow">
+                                                            <div className="absolute inset-0 bg-phantom-red clip-star" />
+                                                            <div className="absolute inset-2 bg-black clip-star" />
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <div className="w-2 h-2 bg-white rotate-45 animate-pulse" />
+                                                            </div>
+                                                        </div>
+                                                        <p className="font-p5 tracking-widest text-sm text-black animate-pulse">DECODING REALITY...</p>
                                                     </div>
                                                 ) : (
-                                                    <div className="h-24 flex items-center justify-center border border-dashed border-gray-700 rounded-lg opacity-30"><span className="font-p5 text-xs tracking-widest">AWAITING COGNITIVE SYNC...</span></div>
+                                                    <div className="h-24 flex items-center justify-center border border-dashed border-gray-300 rounded-lg text-gray-400"><span className="font-p5 text-xs tracking-widest">WAITING...</span></div>
                                                 )}
                                             </div>
                                         );
