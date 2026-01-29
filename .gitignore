@@ -27,6 +27,16 @@ dist-ssr
 
 # Phantom Secrets
 .env
-backend/__pycache__/
-backend/*.db
+*.db
 phantom_database.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# User Data & DB
+backend/uploads/
+backend/chroma_db/
+
