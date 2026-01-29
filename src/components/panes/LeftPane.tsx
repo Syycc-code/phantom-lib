@@ -13,10 +13,11 @@ interface LeftPaneProps {
     onShowShop: () => void;
     onShowMindPalace: () => void;
     onSyncConfig: () => void; // Kept for backward compat but unused in UI
+    onMovePaper: (paperId: number, folderId: string | null) => void; // NEW PROP
     playSfx: (type: any) => void;
 }
 
-const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onShowShop, onShowMindPalace, onSyncConfig, playSfx }: LeftPaneProps) => {
+const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFolder, onBulkImport, onShowStats, onShowShop, onShowMindPalace, onSyncConfig, onMovePaper, playSfx }: LeftPaneProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isVelvet = activeMenu === 'velvet';
   const systemItems = [{ icon: BookOpen, label: 'All References', id: 'all' }, { icon: Plus, label: 'Infiltrate (Add)', id: 'add' }, { icon: Gem, label: 'Velvet Room', id: 'velvet' }, { icon: Tag, label: 'Recent', id: 'recent' }];
@@ -59,10 +60,42 @@ const LeftPane = ({ activeMenu, setActiveMenu, folders, onAddFolder, onDeleteFol
         </div>
         
         <div className="flex-1 overflow-y-auto z-10 space-y-2 pr-2 custom-scrollbar">
+            <button 
+                onClick={() => { setActiveMenu('all'); playSfx('click'); }} 
+                className={`w-full text-left p-2 flex items-center group ${activeMenu === 'all' ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white'}`}
+                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('bg-phantom-red'); }}
+                onDragLeave={(e) => { e.currentTarget.classList.remove('bg-phantom-red'); }}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('bg-phantom-red');
+                    const paperId = e.dataTransfer.getData('paperId');
+                    if (paperId) {
+                        onMovePaper(parseInt(paperId), null); // Move to root
+                        playSfx('confirm');
+                    }
+                }}
+            >
+                <span className="font-mono flex-1">ALL EVIDENCE</span>
+            </button>
             {folders.map((folder: Folder) => (
-                <button key={folder.id} onClick={() => { setActiveMenu(`folder_${folder.id}`); playSfx('click'); }} className={`w-full text-left p-2 flex items-center justify-between group ${activeMenu === `folder_${folder.id}` ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white'}`}>
-                    <span className="font-mono truncate flex-1">{folder.name}</span>
-                    <span onClick={(e) => onDeleteFolder(folder.id, e)} className="opacity-0 group-hover:opacity-100 hover:text-red-500"><X size={14} /></span>
+                <button 
+                    key={folder.id} 
+                    onClick={() => { setActiveMenu(`folder_${folder.id}`); playSfx('click'); }} 
+                    className={`w-full text-left p-2 flex items-center justify-between group transition-colors ${activeMenu === `folder_${folder.id}` ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white'}`}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('bg-phantom-red', 'text-white'); }}
+                    onDragLeave={(e) => { e.currentTarget.classList.remove('bg-phantom-red', 'text-white'); }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove('bg-phantom-red', 'text-white');
+                        const paperId = e.dataTransfer.getData('paperId');
+                        if (paperId) {
+                            onMovePaper(parseInt(paperId), folder.id);
+                            playSfx('confirm');
+                        }
+                    }}
+                >
+                    <span className="font-mono truncate flex-1 pointer-events-none">{folder.name}</span>
+                    <span onClick={(e) => onDeleteFolder(folder.id, e)} className="opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer p-1"><X size={14} /></span>
                 </button>
             ))}
         </div>

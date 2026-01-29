@@ -465,9 +465,24 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
             
             <AnimatePresence>
                 {analysisResult && (
-                    <motion.div drag className="fixed z-[200] top-1/3 left-1/2 w-[400px] bg-white border-4 border-black shadow-xl">
-                        <div className="bg-black p-2 flex justify-between"><span className="text-white font-p5">ANALYSIS</span><X onClick={() => setAnalysisResult(null)} className="text-white cursor-pointer" /></div>
-                        <div className="p-6 bg-zinc-100 text-black whitespace-pre-wrap">{analysisResult.content}</div>
+                    <motion.div drag dragMomentum={false} className="fixed z-[200] top-1/4 left-1/4 w-[500px] max-w-[90vw] bg-white border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col max-h-[60vh]">
+                        <div className="bg-black p-3 flex justify-between items-center cursor-grab active:cursor-grabbing shrink-0">
+                            <span className="text-white font-p5 text-lg tracking-widest flex items-center gap-2">
+                                <Sparkles size={16} className="text-phantom-red" /> 
+                                COGNITION ANALYSIS
+                            </span>
+                            <X onClick={() => setAnalysisResult(null)} className="text-white cursor-pointer hover:text-phantom-red transition-colors" />
+                        </div>
+                        <div className="p-6 bg-[#F2F2F2] text-black whitespace-pre-wrap overflow-y-auto custom-scrollbar font-sans text-lg leading-relaxed border-t-2 border-black min-h-[100px]">
+                            {loadingAnalysis ? (
+                                <div className="flex flex-col items-center justify-center space-y-4 py-8">
+                                    <Loader2 className="animate-spin text-phantom-red" size={32} />
+                                    <p className="font-p5 animate-pulse">HACKING COGNITION...</p>
+                                </div>
+                            ) : (
+                                analysisResult.content
+                            )}
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

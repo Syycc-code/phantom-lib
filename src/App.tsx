@@ -39,6 +39,8 @@ import {
   CallingCard
 } from './components';
 import { HackProgress } from './components/shared/HackProgress';
+import { InputOverlay } from './components/overlays/InputOverlay';
+import { ConfirmOverlay } from './components/overlays/ConfirmOverlay';
 import { ShopOverlay, type ShopItem } from './components/overlays/ShopOverlay';
 import SystemMonitor from './components/SystemMonitor';
 import { UploadProgress } from './components/shared/UploadProgress';
@@ -172,7 +174,7 @@ function App() {
   const playSfx = useAudioSystem();
 
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
-  const [folders, setFolders] = useState<FolderType[]>(() => { const saved = localStorage.getItem('phantom_folders'); return saved ? JSON.parse(saved) : INITIAL_FOLDERS; });
+  const [folders, setFolders] = useState<FolderType[]>([]);
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });
   
   // Shop State
@@ -189,30 +191,38 @@ function App() {
   });
   const [showShop, setShowShop] = useState(false);
 
-  // Load Papers from Vault (Backend)
+  // Load Papers and Folders from Vault (Backend)
   useEffect(() => {
-    const fetchPapers = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch('/api/papers');
-        if (res.ok) {
-          const data = await res.json();
-          // Map backend data to frontend Paper type
+        // Fetch Papers
+        const resPapers = await fetch('/api/papers');
+        if (resPapers.ok) {
+          const data = await resPapers.json();
           const mappedPapers = data.map((p: any) => ({
             ...p,
             type: p.url && p.url.toLowerCase().includes('arxiv') ? 'Arxiv' : 'PDF',
-            tags: p.shadow_problem ? ['Analyzed'] : ['New'],
+            // Parse comma-separated tags from backend, or fallback to status
+            tags: p.tags ? p.tags.split(',') : (p.shadow_problem ? ['Analyzed'] : ['New']),
             fileUrl: `/api/papers/${p.id}/pdf`,
             content: p.abstract || '',
             ocrStatus: 'complete'
           }));
           setPapers(mappedPapers);
         }
+        
+        // Fetch Folders
+        const resFolders = await fetch('/api/folders/');
+        if (resFolders.ok) {
+            const data = await resFolders.json();
+            setFolders(data.map((f: any) => ({ ...f, id: f.id.toString() }))); // Ensure ID is string for frontend
+        }
       } catch (e) {
-        console.error("Failed to fetch papers:", e);
+        console.error("Failed to fetch data:", e);
       }
     };
     
-    fetchPapers();
+    fetchData();
   }, []);
 
   // Keyboard Shortcuts
@@ -228,7 +238,6 @@ function App() {
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, [playSfx]); // Added dependency
 
-  useEffect(() => { localStorage.setItem('phantom_folders', JSON.stringify(folders)); }, [folders]);
   useEffect(() => { localStorage.setItem('phantom_stats', JSON.stringify(stats)); }, [stats]);
   useEffect(() => { localStorage.setItem('phantom_inventory', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('phantom_equipped', JSON.stringify(equipped)); }, [equipped]);
@@ -249,6 +258,16 @@ function App() {
   const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0 });
   const [hackProgress, setHackProgress] = useState<{ show: boolean, stage: "download" | "ocr" | "analyze" | "complete", message?: string }>({ show: false, stage: "download" });
   
+  // Input Overlay State
+  const [inputOverlay, setInputOverlay] = useState<{ show: boolean, title: string, placeholder?: string, onSubmit: (val: string) => void }>({ show: false, title: '', onSubmit: () => {} });
+  // Confirm Overlay State
+  const [confirmOverlay, setConfirmOverlay] = useState<{ show: boolean, title?: string, message: string, onConfirm: () => void }>({ show: false, message: '', onConfirm: () => {} });
+
+  const requestConfirm = useCallback((message: string, action: () => void, title: string = "CONFIRMATION") => {
+      playSfx('click');
+      setConfirmOverlay({ show: true, message, onConfirm: action, title });
+  }, [playSfx]);
+
   // Safe Mode (Reading Mode) Logic
   const [uiMode, setUiMode] = useState<'heist' | 'safe'>('heist');
   useEffect(() => {
@@ -278,22 +297,62 @@ function App() {
   }, [selectedPaper, playSfx]);
 
   const handleAddFolder = useCallback(() => { 
-      const name = window.prompt("ENTER MISSION NAME:"); 
-      if (name) { 
-          setFolders(prev => [...prev, { id: Date.now().toString(), name }]); 
-          handleLevelUp('kindness'); 
-          playSfx('confirm'); 
-      } 
+      playSfx('click');
+      setInputOverlay({
+          show: true,
+          title: "ESTABLISH NEW MISSION",
+          placeholder: "CODENAME...",
+          onSubmit: async (name: string) => {
+              try {
+              const res = await fetch('/api/folders/', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name })
+              });
+                  if (res.ok) {
+                      const newFolder = await res.json();
+                      setFolders(prev => [...prev, { ...newFolder, id: newFolder.id.toString() }]); 
+                      handleLevelUp('kindness'); 
+                  }
+              } catch (e) {
+                  console.error("Add folder failed", e);
+              }
+              setInputOverlay(prev => ({ ...prev, show: false }));
+          }
+      });
   }, [handleLevelUp, playSfx]);
 
   const handleDeleteFolder = useCallback((id: string, e: React.MouseEvent) => { 
       e.stopPropagation(); 
-      if (window.confirm("BURN EVIDENCE?")) { 
-          setFolders(prev => prev.filter(f => f.id !== id)); 
-          if (activeMenu === `folder_${id}`) setActiveMenu('all'); 
-          playSfx('impact'); 
-      } 
-  }, [activeMenu, playSfx]);
+      requestConfirm("BURN EVIDENCE?", async () => { 
+          try {
+              await fetch(`/api/folders/${id}`, { method: 'DELETE' });
+              setFolders(prev => prev.filter(f => f.id !== id)); 
+              
+              // Move papers in frontend state back to root (folder_id = null)
+              setPapers(prev => prev.map(p => p.folder_id === parseInt(id) ? { ...p, folder_id: null } : p));
+
+              if (activeMenu === `folder_${id}`) setActiveMenu('all'); 
+              playSfx('impact'); 
+          } catch (e) {
+              console.error("Delete folder failed", e);
+          }
+      }, "DELETE MISSION");
+  }, [activeMenu, playSfx, requestConfirm]);
+
+  const handleMovePaper = useCallback(async (paperId: number, folderId: string | null) => {
+      try {
+          const res = await fetch(`/api/papers/${paperId}/move?folder_id=${folderId || ''}`, {
+              method: 'PATCH'
+          });
+          if (res.ok) {
+              setPapers(prev => prev.map(p => p.id === paperId ? { ...p, folder_id: folderId ? parseInt(folderId) : null } : p));
+              playSfx('click');
+          }
+      } catch (e) {
+          console.error("Move failed", e);
+      }
+  }, [playSfx]);
 
   const toggleFusionSelection = useCallback((id: number) => { 
       setFusionTargetIds(prev => {
@@ -446,23 +505,28 @@ function App() {
       }
   };
 
-  const handleDeletePaper = async (id: number, e: React.MouseEvent) => { 
-      e.stopPropagation(); 
-      if (window.confirm("BURN THIS INTEL?")) { 
-          try {
-              await fetch(`/api/papers/${id}`, { method: 'DELETE' });
-              setPapers(prev => prev.filter(p => p.id !== id)); 
-              if (selectedPaper?.id === id) setSelectedPaper(null); 
-              playSfx('impact'); 
-          } catch (err) {
-              console.error("Delete failed:", err);
-          }
-      } 
+  const performDeletePaper = async (id: number) => {
+      try {
+          await fetch(`/api/papers/${id}`, { method: 'DELETE' });
+          setPapers(prev => prev.filter(p => p.id !== id)); 
+          if (selectedPaper?.id === id) setSelectedPaper(null); 
+      } catch (err) {
+          console.error("Delete failed:", err);
+      }
   };
 
+  const handleDeletePaper = useCallback((id: number, e: React.MouseEvent) => { 
+      e.stopPropagation(); 
+      requestConfirm("BURN THIS INTEL?", async () => {
+          await performDeletePaper(id);
+          playSfx('impact'); 
+      }, "DESTROY INTEL");
+  }, [selectedPaper, playSfx, requestConfirm]);
+
   const handleBulkDelete = (ids: number[]) => { 
-      // Bulk delete API not implemented yet, do one by one or mock
-      ids.forEach(id => handleDeletePaper(id, { stopPropagation: () => {} } as any));
+      // Confirmed by MiddlePane
+      ids.forEach(id => performDeletePaper(id));
+      playSfx('impact'); 
   };
 
   const handleThirdEye = async () => { 
@@ -481,13 +545,27 @@ function App() {
           
           if (data.raw) {
               const analysis = data.raw;
+              const newTags = analysis.tags || selectedPaper.tags;
               const updated = { 
                   ...selectedPaper, 
                   shadow_problem: analysis.shadow_problem, 
                   persona_solution: analysis.persona_solution, 
                   weakness_flaw: analysis.weakness_flaw, 
-                  tags: analysis.tags || selectedPaper.tags 
+                  tags: newTags
               }; 
+              
+              // Persist Analysis & Tags to Backend
+              fetch(`/api/papers/${selectedPaper.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      shadow_problem: analysis.shadow_problem,
+                      persona_solution: analysis.persona_solution,
+                      weakness_flaw: analysis.weakness_flaw,
+                      tags: Array.isArray(newTags) ? newTags.join(',') : newTags
+                  })
+              }).catch(err => console.error("Failed to save analysis", err));
+
               // Update state
               setPapers(prev => prev.map(p => p.id === updated.id ? updated : p)); 
               setSelectedPaper(updated); 
@@ -502,36 +580,44 @@ function App() {
   };
   
   // SYNC: Configure Obsidian Path
-  const handleSyncConfig = async () => {
-      const path = window.prompt("ENTER OBSIDIAN VAULT PATH (e.g. C:/Users/Name/Documents/Obsidian/Phantom):");
-      if (!path) return;
-      try {
-          const res = await fetch('/api/sync/config', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path })
-          });
-          if (!res.ok) throw new Error("Invalid Path");
-          playSfx('confirm');
-          alert("SYNC PATH ESTABLISHED.");
-      } catch (e) {
-          playSfx('cancel');
-          alert("LINK FAILED: Check path.");
-      }
-  };
+  const handleSyncConfig = useCallback(() => {
+      playSfx('click');
+      setInputOverlay({
+          show: true,
+          title: "SECURE CHANNEL",
+          placeholder: "OBSIDIAN PATH...",
+          onSubmit: async (path: string) => {
+              try {
+                  const res = await fetch('/api/sync/config', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ path })
+                  });
+                  if (!res.ok) throw new Error("Invalid Path");
+                  playSfx('confirm');
+                  alert("SYNC PATH ESTABLISHED.");
+              } catch (e) {
+                  playSfx('cancel');
+                  alert("LINK FAILED: Check path.");
+              }
+              setInputOverlay(prev => ({ ...prev, show: false }));
+          }
+      });
+  }, [playSfx]);
 
   // SYNC: Export Paper
   const handleSyncPaper = async (paperId: number) => {
-      if (!window.confirm("SYNC INTEL TO OBSIDIAN?")) return;
-      try {
-          const res = await fetch(`/api/sync/export/${paperId}`, { method: 'POST' });
-          if (!res.ok) throw new Error("Sync Failed");
-          playSfx('rankup'); // Success sound
-          alert("INTEL TRANSFERRED.");
-      } catch (e) {
-          playSfx('cancel');
-          alert("SYNC ERROR: Is path configured?");
-      }
+      requestConfirm("SYNC INTEL TO OBSIDIAN?", async () => {
+          try {
+              const res = await fetch(`/api/sync/export/${paperId}`, { method: 'POST' });
+              if (!res.ok) throw new Error("Sync Failed");
+              playSfx('rankup'); // Success sound
+              alert("INTEL TRANSFERRED.");
+          } catch (e) {
+              playSfx('cancel');
+              alert("SYNC ERROR: Is path configured?");
+          }
+      }, "SECURE TRANSFER");
   };
 
   // --- SHOP LOGIC ---
@@ -621,7 +707,8 @@ function App() {
           onShowStats={() => { setShowStats(true); playSfx('confirm'); }} 
           onShowShop={() => { setShowShop(true); playSfx('confirm'); }}
           onShowMindPalace={() => { setShowMindPalace(true); playSfx('impact'); }}
-          onSyncConfig={handleSyncConfig} 
+          onSyncConfig={handleSyncConfig}
+          onMovePaper={handleMovePaper} // PASS PROP
           playSfx={playSfx} 
       />
       <div className="flex-1 flex relative">
@@ -634,6 +721,7 @@ function App() {
             onDeletePaper={handleDeletePaper} 
             onBulkImport={handleBulkImport}
             onBulkDelete={handleBulkDelete}
+            onMovePaper={handleMovePaper} 
             toggleFusionSelection={toggleFusionSelection}
             fusionTargetIds={fusionTargetIds}
             isFusing={isFusing}
@@ -643,7 +731,8 @@ function App() {
             showCurtain={showCurtain}
             setShowCurtain={setShowCurtain}
             onLevelUp={handleLevelUp}
-            playSfx={playSfx} // PASSED
+            playSfx={playSfx}
+            requestConfirm={requestConfirm} // NEW PROP
         />
       </div>
       <div className="relative">
@@ -656,6 +745,31 @@ function App() {
             onSaveNote={handleSaveNote}
          />
       </div>
+        {inputOverlay.show && (
+            <AnimatePresence>
+                <InputOverlay 
+                    title={inputOverlay.title}
+                    placeholder={inputOverlay.placeholder}
+                    onSubmit={inputOverlay.onSubmit}
+                    onClose={() => setInputOverlay(prev => ({ ...prev, show: false }))}
+                    playSfx={playSfx}
+                />
+            </AnimatePresence>
+        )}
+        {confirmOverlay.show && (
+            <AnimatePresence>
+                <ConfirmOverlay
+                    title={confirmOverlay.title}
+                    message={confirmOverlay.message}
+                    onConfirm={() => {
+                        confirmOverlay.onConfirm();
+                        setConfirmOverlay(prev => ({ ...prev, show: false }));
+                    }}
+                    onCancel={() => setConfirmOverlay(prev => ({ ...prev, show: false }))}
+                    playSfx={playSfx}
+                />
+            </AnimatePresence>
+        )}
       <AnimatePresence>
         {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} />}
         {showMindPalace && <MindPalace papers={papers} onClose={() => setShowMindPalace(false)} onRead={handleRead} playSfx={playSfx} />}

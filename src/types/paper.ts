@@ -11,7 +11,7 @@ export interface Paper {
   author: string;
   year: string;
   type: PaperType;
-  folderId?: string;
+  folder_id?: number | null;
   tags: string[];
   abstract: string;
   content?: string;
@@ -20,6 +20,7 @@ export interface Paper {
   persona_solution?: string;
   weakness_flaw?: string;
   ocrStatus?: OCRStatus;
+  user_notes?: string;
 }
 
 export interface PaperCreate {

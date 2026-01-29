@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Any, Optional
 import os
 import time
 import httpx
@@ -9,7 +9,7 @@ from sqlmodel import Session, select, desc
 from pydantic import BaseModel
 
 from app.api.deps import get_session
-from app.models.paper import Paper, PaperRead
+from app.models.paper import Paper, PaperRead, PaperUpdate
 from app.services.paper_processor import process_paper
 from app.services.url_parser import parse_url
 from app.api.endpoints.monitor import system_metrics
@@ -204,6 +204,49 @@ async def delete_paper(paper_id: int, session: Session = Depends(get_session)):
     session.delete(paper)
     session.commit()
     return {"ok": True}
+
+@router.patch("/papers/{paper_id}", response_model=PaperRead)
+def update_paper(
+    *,
+    db: Session = Depends(get_session),
+    paper_id: int,
+    paper_in: PaperUpdate,
+) -> Any:
+    """
+    Update a paper.
+    """
+    paper = db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    paper_data = paper_in.dict(exclude_unset=True)
+    for key, value in paper_data.items():
+        setattr(paper, key, value)
+        
+    db.add(paper)
+    db.commit()
+    db.refresh(paper)
+    return paper
+
+@router.patch("/papers/{paper_id}/move", response_model=PaperRead)
+def move_paper(
+    *,
+    db: Session = Depends(get_session),
+    paper_id: int,
+    folder_id: Optional[int] = None, # If None, move to root
+) -> Any:
+    """
+    Move paper to a specific folder (or root if folder_id is null)
+    """
+    paper = db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+        
+    paper.folder_id = folder_id
+    db.add(paper)
+    db.commit()
+    db.refresh(paper)
+    return paper
 
 # Legacy support
 @router.post("/scan_document")

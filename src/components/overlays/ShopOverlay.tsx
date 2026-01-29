@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingBag, Lock, Check, AlertTriangle, Palette, Music, Sparkles, Trash2 } from 'lucide-react';
+import { X, ShoppingBag, Lock, Check, AlertTriangle, Palette, Music, Sparkles, Trash2, MessageSquare, BrainCircuit, Monitor } from 'lucide-react';
 import type { PhantomStats, PlaySoundFunction } from '../../types';
 
 interface ShopOverlayProps {
@@ -274,78 +274,98 @@ export const ShopOverlay = ({ stats, inventory, equipped, onClose, onPurchase, o
                 {/* --- RIGHT SIDE: THE GOODS --- */}
                 <div className="w-2/3 bg-zinc-900 flex flex-col">
                     {/* Item List */}
-                    <div className="flex-1 overflow-y-auto p-8 grid grid-cols-2 gap-4 content-start custom-scrollbar">
-                        {filteredItems.map((item) => {
-                            const isOwned = inventory.includes(item.id);
-                            let isEquipped = false;
-                            if (item.type === 'THEME') isEquipped = equipped.theme === item.id;
-                            else if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === item.value;
-                            else if (item.id.startsWith('skin_')) isEquipped = equipped.effect_im === item.value;
-                            else if (item.id.startsWith('marker_')) isEquipped = equipped.effect_marker === item.value;
-
-                            const isSelected = selectedItem?.id === item.id;
-                            const isHovered = hoveredItem?.id === item.id;
-                            const canAfford = stats[item.currency] >= item.cost;
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
+                        {[
+                            { id: 'THEME', label: 'UI THEMES', icon: Palette, filter: (i: ShopItem) => i.type === 'THEME' },
+                            { id: 'SYSTEM', label: 'SYSTEM MODULES', icon: Sparkles, filter: (i: ShopItem) => ['visualizer_', 'radar_'].some(p => i.id.startsWith(p)) },
+                            { id: 'IM', label: 'COMMUNICATION', icon: MessageSquare, filter: (i: ShopItem) => i.id.startsWith('skin_') },
+                            { id: 'TOOLS', label: 'COGNITIVE TOOLS', icon: BrainCircuit, filter: (i: ShopItem) => i.id.startsWith('marker_') },
+                        ].map(cat => {
+                            const categoryItems = filteredItems.filter(cat.filter);
+                            if (categoryItems.length === 0) return null;
 
                             return (
-                                <motion.div
-                                    key={item.id}
-                                    onClick={() => handleItemClick(item)}
-                                    onMouseEnter={() => { setHoveredItem(item); playSfx('hover'); }}
-                                    onMouseLeave={() => setHoveredItem(null)}
-                                    className={`relative p-4 border-2 cursor-pointer transition-all group overflow-hidden ${
-                                        isSelected 
-                                            ? 'border-white bg-white text-black' 
-                                            : isHovered 
-                                                ? 'border-phantom-red bg-black/80 text-white' 
-                                                : 'border-gray-700 bg-black/50 text-gray-400 hover:border-gray-500'
-                                    }`}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="flex items-center gap-2">
-                                            {item.type === 'THEME' && <Palette size={16} />}
-                                            {item.type === 'EFFECT' && <Sparkles size={16} />}
-                                            <h3 className={`font-p5 text-xl ${isSelected ? 'text-black' : 'text-white'}`}>
-                                                {item.name}
-                                            </h3>
-                                        </div>
-                                        {isEquipped && <div className="bg-phantom-red text-white text-[10px] px-2 py-0.5 font-bold uppercase">EQUIPPED</div>}
-                                        {isOwned && !isEquipped && <Check size={16} className="text-green-500" />}
+                                <div key={cat.id}>
+                                    <div className="flex items-center gap-2 mb-4 border-b border-gray-700 pb-2 text-gray-500 sticky top-0 bg-zinc-900 z-10 shadow-sm">
+                                        <cat.icon size={16} />
+                                        <span className="font-p5 tracking-widest">{cat.label}</span>
                                     </div>
-                                    
-                                    <p className={`font-serif text-sm mb-4 leading-tight ${isSelected ? 'text-gray-800' : 'text-gray-500'} ${isHovered ? 'text-gray-300' : ''}`}>
-                                        {item.desc}
-                                    </p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {categoryItems.map((item) => {
+                                            const isOwned = inventory.includes(item.id);
+                                            let isEquipped = false;
+                                            if (item.type === 'THEME') isEquipped = equipped.theme === item.id;
+                                            else if (item.id.startsWith('visualizer_') || item.id.startsWith('radar_')) isEquipped = equipped.effect_monitor === item.value;
+                                            else if (item.id.startsWith('skin_')) isEquipped = equipped.effect_im === item.value;
+                                            else if (item.id.startsWith('marker_')) isEquipped = equipped.effect_marker === item.value;
 
-                                    {!isOwned && (
-                                        <div className="flex justify-end">
-                                            <div className={`flex items-center gap-2 px-3 py-1 font-mono text-xs border ${
-                                                canAfford 
-                                                    ? (isSelected || isHovered ? 'border-black text-black bg-white' : 'border-gray-500 text-gray-300')
-                                                    : 'border-red-900 text-red-700 bg-red-900/10'
-                                            }`}>
-                                                {item.cost > 0 ? (
-                                                    <>
-                                                        <span>COST:</span>
-                                                        <span className="font-bold">{item.cost} {item.currency.toUpperCase()}</span>
-                                                    </>
-                                                ) : (
-                                                    <span>FREE</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                    {/* Color Preview Strip */}
-                                    {item.type === 'THEME' && item.value && (
-                                        <div 
-                                            className="absolute bottom-0 left-0 w-1.5 h-full opacity-50 group-hover:opacity-100 transition-opacity"
-                                            style={{ backgroundColor: item.value }}
-                                        />
-                                    )}
-                                </motion.div>
+                                            const isSelected = selectedItem?.id === item.id;
+                                            const isHovered = hoveredItem?.id === item.id;
+                                            const canAfford = stats[item.currency] >= item.cost;
+
+                                            return (
+                                                <motion.div
+                                                    key={item.id}
+                                                    onClick={() => handleItemClick(item)}
+                                                    onMouseEnter={() => { setHoveredItem(item); playSfx('hover'); }}
+                                                    onMouseLeave={() => setHoveredItem(null)}
+                                                    className={`relative p-4 border-2 cursor-pointer transition-all group overflow-hidden ${
+                                                        isSelected 
+                                                            ? 'border-white bg-white text-black' 
+                                                            : isHovered 
+                                                                ? 'border-phantom-red bg-black/80 text-white' 
+                                                                : 'border-gray-700 bg-black/50 text-gray-400 hover:border-gray-500'
+                                                    }`}
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            {item.type === 'THEME' && <Palette size={16} />}
+                                                            {item.type === 'EFFECT' && <Sparkles size={16} />}
+                                                            <h3 className={`font-p5 text-xl ${isSelected ? 'text-black' : 'text-white'}`}>
+                                                                {item.name}
+                                                            </h3>
+                                                        </div>
+                                                        {isEquipped && <div className="bg-phantom-red text-white text-[10px] px-2 py-0.5 font-bold uppercase">EQUIPPED</div>}
+                                                        {isOwned && !isEquipped && <Check size={16} className="text-green-500" />}
+                                                    </div>
+                                                    
+                                                    <p className={`font-serif text-sm mb-4 leading-tight ${isSelected ? 'text-gray-800' : 'text-gray-500'} ${isHovered ? 'text-gray-300' : ''}`}>
+                                                        {item.desc}
+                                                    </p>
+
+                                                    {!isOwned && (
+                                                        <div className="flex justify-end">
+                                                            <div className={`flex items-center gap-2 px-3 py-1 font-mono text-xs border ${
+                                                                canAfford 
+                                                                    ? (isSelected || isHovered ? 'border-black text-black bg-white' : 'border-gray-500 text-gray-300')
+                                                                    : 'border-red-900 text-red-700 bg-red-900/10'
+                                                            }`}>
+                                                                {item.cost > 0 ? (
+                                                                    <>
+                                                                        <span>COST:</span>
+                                                                        <span className="font-bold">{item.cost} {item.currency.toUpperCase()}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <span>FREE</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Color Preview Strip */}
+                                                    {item.type === 'THEME' && item.value && (
+                                                        <div 
+                                                            className="absolute bottom-0 left-0 w-1.5 h-full opacity-50 group-hover:opacity-100 transition-opacity"
+                                                            style={{ backgroundColor: item.value }}
+                                                        />
+                                                    )}
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             );
                         })}
                     </div>

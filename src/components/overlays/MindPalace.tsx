@@ -36,6 +36,31 @@ const MAJOR_ARCANA = [
     { number: "XXI", name: "The World", meaning: "Completion, Travel" }
 ];
 
+const TAROT_IMAGES: Record<string, string> = {
+    "0": "https://upload.wikimedia.org/wikipedia/commons/9/90/RWS_Tarot_00_Fool.jpg",
+    "I": "https://upload.wikimedia.org/wikipedia/commons/d/de/RWS_Tarot_01_Magician.jpg",
+    "II": "https://upload.wikimedia.org/wikipedia/commons/8/88/RWS_Tarot_02_High_Priestess.jpg",
+    "III": "https://upload.wikimedia.org/wikipedia/commons/d/d2/RWS_Tarot_03_Empress.jpg",
+    "IV": "https://upload.wikimedia.org/wikipedia/commons/c/c3/RWS_Tarot_04_Emperor.jpg",
+    "V": "https://upload.wikimedia.org/wikipedia/commons/8/8d/RWS_Tarot_05_Hierophant.jpg",
+    "VI": "https://upload.wikimedia.org/wikipedia/commons/d/db/RWS_Tarot_06_Lovers.jpg",
+    "VII": "https://upload.wikimedia.org/wikipedia/commons/9/9b/RWS_Tarot_07_Chariot.jpg",
+    "VIII": "https://upload.wikimedia.org/wikipedia/commons/f/f5/RWS_Tarot_08_Strength.jpg",
+    "IX": "https://upload.wikimedia.org/wikipedia/commons/4/4d/RWS_Tarot_09_Hermit.jpg",
+    "X": "https://upload.wikimedia.org/wikipedia/commons/3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg",
+    "XI": "https://upload.wikimedia.org/wikipedia/commons/e/e0/RWS_Tarot_11_Justice.jpg",
+    "XII": "https://upload.wikimedia.org/wikipedia/commons/2/2b/RWS_Tarot_12_Hanged_Man.jpg",
+    "XIII": "https://upload.wikimedia.org/wikipedia/commons/d/d7/RWS_Tarot_13_Death.jpg",
+    "XIV": "https://upload.wikimedia.org/wikipedia/commons/f/f8/RWS_Tarot_14_Temperance.jpg",
+    "XV": "https://upload.wikimedia.org/wikipedia/commons/5/55/RWS_Tarot_15_Devil.jpg",
+    "XVI": "https://upload.wikimedia.org/wikipedia/commons/5/53/RWS_Tarot_16_Tower.jpg",
+    "XVII": "https://upload.wikimedia.org/wikipedia/commons/d/db/RWS_Tarot_17_Star.jpg",
+    "XVIII": "https://upload.wikimedia.org/wikipedia/commons/7/7f/RWS_Tarot_18_Moon.jpg",
+    "XIX": "https://upload.wikimedia.org/wikipedia/commons/1/17/RWS_Tarot_19_Sun.jpg",
+    "XX": "https://upload.wikimedia.org/wikipedia/commons/d/dd/RWS_Tarot_20_Judgement.jpg",
+    "XXI": "https://upload.wikimedia.org/wikipedia/commons/f/ff/RWS_Tarot_21_World.jpg"
+};
+
 // --- TYPES ---
 interface Node {
     id: string;
@@ -133,64 +158,114 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
         const tick = () => {
             const width = window.innerWidth;
             const height = window.innerHeight;
-            const k = 0.05; // Spring constant
-            const repulsion = 5000;
-            const centerRepulsion = 100;
-
+            
+            // --- PHYSICS CONSTANTS ---
+            const REPULSION = 15000;
+            const CENTER_GRAVITY = 0.0005;
+            const DAMPING = 0.92;
+            const MAX_SPEED = 12;
+            const BASE_SPRING_K = 0.005;
+            
             const currentNodes = simulationNodes.current;
+            const now = Date.now() / 1000;
 
-            // Apply Forces
+            // Reset Forces (using temp variables or just applying to velocity directly?)
+            // We'll use a `forces` map to accumulate first.
+            const forces = new Map<string, {x: number, y: number}>();
+            currentNodes.forEach(n => forces.set(n.id, {x: 0, y: 0}));
+
+            const addForce = (id: string, x: number, y: number) => {
+                const f = forces.get(id);
+                if (f) { f.x += x; f.y += y; }
+            };
+
+            // 1. REPULSION (N^2)
             for (let i = 0; i < currentNodes.length; i++) {
-                const node = currentNodes[i];
+                for (let j = i + 1; j < currentNodes.length; j++) {
+                    const n1 = currentNodes[i];
+                    const n2 = currentNodes[j];
+                    const dx = n1.x - n2.x;
+                    const dy = n1.y - n2.y;
+                    const distSq = dx*dx + dy*dy;
+                    const dist = Math.sqrt(distSq) || 1;
+                    
+                    if (dist < 800) { // Interaction radius
+                        const force = REPULSION / (distSq + 100);
+                        const fx = (dx / dist) * force;
+                        const fy = (dy / dist) * force;
+                        addForce(n1.id, fx, fy);
+                        addForce(n2.id, -fx, -fy);
+                    }
+                }
+            }
+
+            // 2. SPRINGS (Links)
+            links.forEach(link => {
+                const source = currentNodes.find(n => n.id === link.source);
+                const target = currentNodes.find(n => n.id === link.target);
+                if (source && target) {
+                    const dx = target.x - source.x;
+                    const dy = target.y - source.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                    
+                    // Hooke's Law: F = k * (current_dist - rest_length)
+                    // Stronger link = Closer (shorter rest length) + Stiffer
+                    const restLength = 100 + (1 - link.strength) * 200; 
+                    const k = BASE_SPRING_K * (1 + link.strength * 2);
+                    
+                    const displacement = dist - restLength;
+                    const force = k * displacement;
+                    
+                    const fx = (dx / dist) * force;
+                    const fy = (dy / dist) * force;
+                    
+                    addForce(source.id, fx, fy);
+                    addForce(target.id, -fx, -fy);
+                }
+            });
+
+            // 3. INTEGRATION & CONSTRAINTS
+            currentNodes.forEach(node => {
                 if (node.type === 'fool') {
-                    // Lock Fool to center
                     node.x = width / 2;
                     node.y = height / 2;
-                    continue;
+                    return;
                 }
 
-                let fx = 0, fy = 0;
+                const f = forces.get(node.id) || {x: 0, y: 0};
+                
+                // Center Gravity
+                f.x += (width/2 - node.x) * CENTER_GRAVITY;
+                f.y += (height/2 - node.y) * CENTER_GRAVITY;
 
-                // 1. Repulsion (Nodes push away from each other)
-                for (let j = 0; j < currentNodes.length; j++) {
-                    if (i === j) continue;
-                    const other = currentNodes[j];
-                    const dx = node.x - other.x;
-                    const dy = node.y - other.y;
-                    const distSq = dx * dx + dy * dy || 1;
-                    const force = repulsion / distSq;
-                    fx += (dx / Math.sqrt(distSq)) * force;
-                    fy += (dy / Math.sqrt(distSq)) * force;
+                // Levitation (Sine Wave)
+                // Use consistent random seed based on ID length + char code
+                const seed = node.id.length + (node.id.charCodeAt(node.id.length-1) || 0);
+                f.y += Math.sin(now * 2 + seed) * 0.08;
+
+                // Apply Force to Velocity
+                node.vx = (node.vx + f.x) * DAMPING;
+                node.vy = (node.vy + f.y) * DAMPING;
+
+                // Speed Limit
+                const speedSq = node.vx*node.vx + node.vy*node.vy;
+                if (speedSq > MAX_SPEED*MAX_SPEED) {
+                    const speed = Math.sqrt(speedSq);
+                    node.vx = (node.vx / speed) * MAX_SPEED;
+                    node.vy = (node.vy / speed) * MAX_SPEED;
                 }
 
-                // 2. Attraction (Links pull together)
-                links.forEach(link => {
-                    const isSource = link.source === node.id;
-                    const isTarget = link.target === node.id;
-                    if (isSource || isTarget) {
-                        const targetId = isSource ? link.target : link.source;
-                        const targetNode = currentNodes.find(n => n.id === targetId);
-                        if (targetNode) {
-                            const dx = targetNode.x - node.x;
-                            const dy = targetNode.y - node.y;
-                            fx += dx * k * link.strength;
-                            fy += dy * k * link.strength;
-                        }
-                    }
-                });
-
-                // 3. Center Gravity (Keep them on screen)
-                const dx = (width / 2) - node.x;
-                const dy = (height / 2) - node.y;
-                fx += dx * 0.002;
-                fy += dy * 0.002;
-
-                // Apply Velocity
-                node.vx = (node.vx + fx) * 0.9; // Damping
-                node.vy = (node.vy + fy) * 0.9;
+                // Update Position
                 node.x += node.vx;
                 node.y += node.vy;
-            }
+
+                // Screen Boundaries (Soft Bounce)
+                const margin = 50;
+                if (node.x < margin) node.vx += 0.5;
+                if (node.x > width - margin) node.vx -= 0.5;
+                if (node.y < margin) node.vy += 0.5;
+                if (node.y > height - margin) node.vy -= 0.5;
+            });
 
             setRenderTrigger(prev => prev + 1); // Force re-render
             animationFrameId = requestAnimationFrame(tick);
@@ -201,16 +276,25 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
     }, [nodes, links]);
 
     return (
-        <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md overflow-hidden"
-            ref={containerRef}
-            onClick={() => setSelectedNode(null)}
-        >
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 overflow-hidden" // Removed bg-black/95
+                ref={containerRef}
+                onClick={() => setSelectedNode(null)}
+            >
             {/* --- BACKGROUND PATTERN --- */}
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 pointer-events-none"></div>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none bg-black">
+                {/* Deep Red Glow at Center - Atmosphere (Darker but breathing) */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vw] h-[100vw] bg-phantom-red blur-[150px] opacity-10 rounded-full animate-pulse" />
+                
+                {/* Rotating Burst - Dynamic & Brighter */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200vw] h-[200vw] bg-[conic-gradient(from_0deg,#E60012_0deg,transparent_5deg,transparent_25deg,#E60012_30deg,transparent_45deg)] opacity-15 animate-[spin_60s_linear_infinite]" />
+                
+                {/* Dots - Texture */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#333_1px,transparent_1px)] bg-[length:24px_24px] opacity-20 mix-blend-screen" />
+            </div>
             
             {/* --- HEADER --- */}
             <div className="absolute top-6 left-12 z-50 pointer-events-none">
@@ -245,9 +329,9 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                             y1={source.y}
                             x2={target.x}
                             y2={target.y}
-                            stroke={isStrong ? "#FF0000" : "#444"}
-                            strokeWidth={isStrong ? 2 : 1}
-                            strokeOpacity={isStrong ? 0.6 : 0.2}
+                            stroke={isStrong ? "#E60012" : "#666"}
+                            strokeWidth={isStrong ? 2.5 : 1}
+                            strokeOpacity={isStrong ? 0.8 : 0.3}
                             initial={{ pathLength: 0 }}
                             animate={{ pathLength: 1 }}
                             transition={{ duration: 1, delay: i * 0.05 }}
@@ -275,42 +359,49 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                             setSelectedNode(node);
                             playSfx('click');
                         }}
-                        whileHover={{ scale: 1.1, zIndex: 50 }}
+                        whileHover={{ scale: 1.2, zIndex: 50, rotate: [0, -2, 2, 0] }}
                     >
+                        {/* TOOLTIP ON HOVER */}
+                        <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
+                            <div className="bg-black text-white px-3 py-1 font-p5 text-lg border-2 border-phantom-red shadow-[4px_4px_0px_#E60012] transform -skew-x-12">
+                                {node.type === 'fool' ? 'COGNITIVE CORE' : node.data?.title}
+                            </div>
+                            {node.data?.tags && (
+                                <div className="flex gap-1 justify-center mt-1">
+                                    {node.data.tags.map((t, i) => (
+                                        <span key={i} className="bg-white text-black text-[10px] px-1 font-bold transform -skew-x-12">{t}</span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         {/* TAROT CARD VISUAL */}
-                        <div className={`relative w-24 h-36 bg-black border-2 transition-all duration-300 ${
+                        <div className={`relative w-32 h-52 bg-black border-2 rounded-lg overflow-hidden transition-all duration-300 ${
                             node.type === 'fool' 
                                 ? 'border-phantom-blue shadow-[0_0_20px_#00f]' 
                                 : selectedNode?.id === node.id 
-                                    ? 'border-phantom-red shadow-[0_0_30px_#f00] scale-125' 
-                                    : 'border-white/50 hover:border-phantom-red'
+                                    ? 'border-phantom-red shadow-[0_0_30px_#f00] scale-110' 
+                                    : 'border-white/50 group-hover:border-phantom-red group-hover:shadow-[0_0_15px_#E60012]'
                         }`}>
-                            {/* Card Pattern/Image Placeholder */}
-                            <div className="absolute inset-1 border border-white/20 flex flex-col items-center p-1 bg-zinc-900">
-                                {/* Arcana Number Top */}
-                                <div className="text-[10px] font-serif text-white/50 w-full text-center border-b border-white/10 pb-1">
+                            {/* Card Image */}
+                            {node.arcana && TAROT_IMAGES[node.arcana.number] ? (
+                                <img 
+                                    src={TAROT_IMAGES[node.arcana.number]} 
+                                    alt={node.arcana.name} 
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-white/20">
+                                    <Brain size={40} />
+                                </div>
+                            )}
+
+                            {/* Overlay info (Always visible but subtle, pops on hover) */}
+                            <div className="absolute inset-0 flex flex-col justify-between p-2 bg-gradient-to-b from-black/60 via-transparent to-black/80">
+                                <div className="text-center font-serif text-white/90 text-xs tracking-widest border-b border-white/20 pb-1">
                                     {node.arcana?.number}
                                 </div>
-                                
-                                {/* Icon / Content */}
-                                <div className="flex-1 flex items-center justify-center">
-                                    {node.type === 'fool' ? (
-                                        <Brain size={32} className="text-phantom-blue animate-pulse" />
-                                    ) : (
-                                        <div className="text-center">
-                                            <ExternalLink size={20} className="text-white/30 mx-auto mb-1" />
-                                            {/* Mini Tag Indicators */}
-                                            <div className="flex gap-1 justify-center flex-wrap">
-                                                {node.data?.tags.slice(0, 2).map((t, i) => (
-                                                    <span key={i} className="w-1 h-1 rounded-full bg-phantom-red" />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Arcana Name Bottom */}
-                                <div className="text-[9px] font-serif text-white/80 uppercase tracking-tighter text-center pt-1 border-t border-white/10 w-full truncate">
+                                <div className="text-center font-p5 text-white text-sm tracking-wide uppercase pt-1 border-t border-white/20">
                                     {node.arcana?.name}
                                 </div>
                             </div>

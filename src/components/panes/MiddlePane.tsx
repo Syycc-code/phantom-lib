@@ -11,6 +11,7 @@ interface MiddlePaneProps {
     onDeletePaper: (id: number, e: React.MouseEvent) => void;
     onBulkImport: (files: FileList) => void;
     onBulkDelete: (ids: number[]) => void;
+    onMovePaper?: (paperId: number, folderId: string | null) => void; // New prop
     toggleFusionSelection: (id: number) => void;
     fusionTargetIds: number[];
     isFusing: boolean;
@@ -21,6 +22,7 @@ interface MiddlePaneProps {
     setShowCurtain: (v: boolean) => void;
     onLevelUp: (stat: any) => void;
     playSfx: (type: any) => void;
+    requestConfirm: (message: string, action: () => void, title?: string) => void; // NEW PROP
 }
 
 // Memoized Paper Row Component to prevent unnecessary re-renders
@@ -64,9 +66,17 @@ const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, to
         }
     }, [isVelvet, isSelectionMode, paper, toggleFusionSelection, toggleSelection, onSelect]);
 
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.setData('paperId', paper.id.toString());
+        e.dataTransfer.effectAllowed = 'move';
+        // Add a ghost image or effect if desired
+    };
+
     return (
         <motion.div 
             layoutId={`paper-${paper.id}`} // Keeps layout stable
+            draggable={!isVelvet && !isSelectionMode} // Enable drag
+            onDragStart={handleDragStart}
             custom={index}
             variants={cardVariants}
             initial="hidden"
@@ -111,19 +121,22 @@ const PaperRow = memo(({ paper, index, isSelected, isSelectionMode, onSelect, to
     );
 });
 
-const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onBulkImport, onBulkDelete, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx }: MiddlePaneProps) => {
+const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDeletePaper, onBulkImport, onBulkDelete, onMovePaper, toggleFusionSelection, fusionTargetIds, isFusing, setIsFusing, setFusionResult, setShowCurtain, onLevelUp, playSfx, requestConfirm }: MiddlePaneProps) => {
     const [inputUrl, setInputUrl] = useState('');
     const [isStealing, setIsStealing] = useState(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     
     const isVelvet = activeMenu === 'velvet';
+    const isFolderView = activeMenu.startsWith('folder_'); // Detect folder view
+    const currentFolderId = isFolderView ? activeMenu.split('folder_')[1] : null;
     
     // Memoize filtering to prevent recalc on every render
     const filteredPapers = React.useMemo(() => papers.filter((p: any) => { 
         if (activeMenu === 'all' || activeMenu === 'velvet') return true; 
         if (activeMenu === 'recent') return true; 
-        if (activeMenu.startsWith('folder_')) return p.folderId === activeMenu.split('folder_')[1]; 
+        // Important: Match folder_id (int) with currentFolderId (string)
+        if (activeMenu.startsWith('folder_')) return p.folder_id == activeMenu.split('folder_')[1]; 
         return false; 
     }), [papers, activeMenu]);
 
@@ -149,12 +162,22 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
     }, [playSfx]);
 
     const executeBulkDelete = () => { 
-        if (window.confirm(`BURN ${selectedIds.length} INTEL ITEMS?`)) { 
+        requestConfirm(`BURN ${selectedIds.length} INTEL ITEMS?`, () => {
             onBulkDelete(selectedIds); 
             setSelectedIds([]); 
             setIsSelectionMode(false); 
             playSfx('impact'); 
-        } 
+        }, "MASS DESTRUCTION");
+    };
+
+    const handleRemoveFromFolder = () => {
+        if (!currentFolderId || !onMovePaper) return;
+        requestConfirm(`REMOVE ${selectedIds.length} ITEMS FROM MISSION?`, () => {
+            selectedIds.forEach(id => onMovePaper(id, null)); // Move to root
+            setSelectedIds([]);
+            setIsSelectionMode(false);
+            playSfx('confirm');
+        }, "EXTRACT INTEL");
     };
 
     const startFusion = () => { 
@@ -269,7 +292,12 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
             </div>
             
             {isSelectionMode && selectedIds.length > 0 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50 flex gap-4">
+                    {isFolderView && (
+                        <button onClick={handleRemoveFromFolder} className="bg-zinc-800 text-white text-2xl font-p5 px-8 py-4 border-4 border-gray-500 shadow-[8px_8px_0px_#000] hover:bg-white hover:text-black transition-all flex items-center space-x-3">
+                            <Upload className="rotate-180" /><span>EXTRACT ({selectedIds.length})</span>
+                        </button>
+                    )}
                     <button onClick={executeBulkDelete} className="bg-phantom-red text-white text-2xl font-p5 px-8 py-4 border-4 border-black shadow-[8px_8px_0px_#000] hover:bg-black hover:text-phantom-red transition-all flex items-center space-x-3">
                         <Trash2 /><span>BURN ({selectedIds.length})</span>
                     </button>
