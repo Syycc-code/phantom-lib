@@ -41,10 +41,44 @@ async def chat_stream(
             # 1. RAG
             print(f"[CHAT] Starting RAG... Available: {RAG_AVAILABLE}")
             citations = []
+            sources = []
             
             # Filter Logic & System Context
             file_filter = None
             scope_info = "Current Scope: GLOBAL (Searching all files)."
+            
+            # --- FEATURE: Smart Query Translation ---
+            search_query = request.query
+            try:
+                # Detect if query contains Chinese characters
+                import re
+                if re.search(r'[\u4e00-\u9fff]', request.query):
+                    print(f"[CHAT] Detected Chinese query. Translating/Expanding...")
+                    system_metrics["ai_state"] = "TRANSLATING"
+                    yield f"data: {json.dumps({'content': '🌐 [Translating Query]...\\n'}, ensure_ascii=False)}\n\n"
+                    
+                    trans_prompt = (
+                        "You are a translation engine for an academic search system. "
+                        "Convert the following Chinese query into English keywords and a concise English question. "
+                        "Output ONLY the English text, no explanations."
+                    )
+                    trans_res = await deepseek_client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[
+                            {"role": "system", "content": trans_prompt},
+                            {"role": "user", "content": request.query}
+                        ],
+                        stream=False
+                    )
+                    translated_q = trans_res.choices[0].message.content.strip()
+                    print(f"[CHAT] Translated: '{request.query}' -> '{translated_q}'")
+                    # Combine original + translated for maximum recall
+                    search_query = f"{translated_q}" 
+            except Exception as e:
+                print(f"[CHAT] Translation Failed: {e}")
+                
+            system_metrics["ai_state"] = "THINKING"
+            # ----------------------------------------
             
             if request.scope and request.scope.get('folder_id'):
                 folder_id = request.scope['folder_id']
@@ -68,8 +102,36 @@ async def chat_stream(
             if RAG_AVAILABLE:
                 try:
                     # Updated retrieve_context returns (text, citations_list)
-                    context_text, citations = await asyncio.to_thread(retrieve_context, request.query, file_filter=file_filter)
+                    # Use the translated search_query instead of request.query
+                    context_text, citations = await asyncio.to_thread(retrieve_context, search_query, file_filter=file_filter)
                     print(f"[CHAT] RAG Complete. Citations found: {len(citations)}")
+                    
+                    # --- FIX: Map Source ID to Paper Title ---
+                    if citations:
+                        # Extract IDs (assuming source is numeric ID string)
+                        paper_ids = []
+                        for c in citations:
+                            if c['source'].isdigit():
+                                paper_ids.append(int(c['source']))
+                        
+                        if paper_ids:
+                            # Fetch titles from DB
+                            # Use session.exec directly
+                            from sqlmodel import col
+                            paper_map = {}
+                            try:
+                                # Safe query
+                                db_papers = session.exec(select(Paper).where(col(Paper.id).in_(paper_ids))).all()
+                                paper_map = {str(p.id): p.title for p in db_papers}
+                            except Exception as db_e:
+                                print(f"[CHAT] Failed to map titles: {db_e}")
+
+                            # Update Citations
+                            for c in citations:
+                                if c['source'] in paper_map:
+                                    c['source'] = paper_map[c['source']]
+                    # -----------------------------------------
+
                 except Exception as e:
                     print(f"[CHAT] RAG Failed: {e}")
                     context_text = ""

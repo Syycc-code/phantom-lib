@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Wifi, Brain, Zap, Clock, Disc, ShieldAlert } from 'lucide-react';
+import { Activity, Wifi, Brain, Zap, Clock, Disc, ShieldAlert, Power } from 'lucide-react';
 
 interface Metrics {
     status: string;
@@ -21,6 +21,17 @@ export default function SystemMonitor({ variant = 'default' }: SystemMonitorProp
         ai_state: "IDLE"
     });
     const [ping, setPing] = useState(0);
+    
+    const handleShutdown = async () => {
+        if (!confirm("SHUT DOWN SYSTEM? (This will stop the backend)")) return;
+        try {
+            await fetch('/api/monitor/shutdown', { method: 'POST' });
+            alert("SYSTEM OFFLINE. You can close this window.");
+            window.close(); // Only works if opened by script
+        } catch (e) {
+            console.error("Shutdown failed", e);
+        }
+    };
     
     // Visualizer State
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -168,6 +179,14 @@ export default function SystemMonitor({ variant = 'default' }: SystemMonitorProp
                             </span>
                         </div>
                     </div>
+                    
+                    {/* Shutdown Button */}
+                    <button 
+                        onClick={handleShutdown}
+                        className="w-full mt-2 bg-red-900/50 hover:bg-red-600 text-white text-[10px] font-bold py-1 border border-red-500 flex items-center justify-center gap-1 transition-colors"
+                    >
+                        <Power size={10} /> DISCONNECT
+                    </button>
                 </div>
             </div>
         </motion.div>

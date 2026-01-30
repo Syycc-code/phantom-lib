@@ -40,7 +40,8 @@ def get_rag_components():
 
     try:
         # Use PersistentClient for data persistence
-        persist_path = os.path.join(settings.UPLOAD_DIR, "chroma_db")
+        # FIXED: Use v2 path to avoid locks from crash
+        persist_path = os.path.join(settings.UPLOAD_DIR, "chroma_db_v2")
         os.makedirs(persist_path, exist_ok=True)
         
         print(f"[PHANTOM] Initializing RAG (Lazy)... Path: {persist_path}")
@@ -90,33 +91,27 @@ def get_rag_components():
             # We can also use 'all-MiniLM-L6-v2' which is smaller and less likely to timeout
             os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
             
+            # --- MODEL MIRROR CONFIG ---
+            # Use 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2' for best multilingual support
+            # Use 'sentence-transformers/all-MiniLM-L6-v2' for speed/fallback
+            model_name = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+            
             try:
-                # OPTIMIZATION: Only download pytorch weights, skip onnx/openvino
-                # from huggingface_hub import snapshot_download
-                # model_name = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
-                # FALLBACK: Use smaller model to avoid network timeouts
-                model_name = 'sentence-transformers/all-MiniLM-L6-v2'
-                
-                print("[PHANTOM] Loading Embedding Model...")
-                # Simplified loading - let SentenceTransformer handle caching
-                _embedder = SentenceTransformer(model_name, device='cpu')
-                
-                # Check if model is already cached fully or partially
-                # If we are here, previous download might be partial.
-                # Just using SentenceTransformer() triggers full repo download.
-                # So we use snapshot_download to restrict files.
-                # print("[PHANTOM] Ensuring only core model files are present...")
-                # local_dir = snapshot_download(
-                #     repo_id=model_name,
-                #     allow_patterns=["*.json", "*.txt", "pytorch_model.bin", "*.safetensors", "tokenizer*"],
-                #     ignore_patterns=["*.onnx", "*.xml", "*.bin"], # Explicitly ignore heavy extra formats
-                #     local_dir_use_symlinks=False
-                # )
-                # _embedder = SentenceTransformer(local_dir, device='cpu')
+                print(f"[PHANTOM] Loading Embedding Model: {model_name}...")
+                # Add timeout options if possible, otherwise rely on mirror
+                _embedder = SentenceTransformer(model_name, device='cpu', trust_remote_code=True)
             except Exception as dl_error:
-                print(f"[PHANTOM] Download Timeout/Error: {dl_error}. Retrying with smaller model...")
-                _embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                print(f"[PHANTOM] Download Timeout/Error with Mirror: {dl_error}.")
+                print("[PHANTOM] Attempting fallback to local/smaller model...")
                 
+                try:
+                    # Fallback 1: Try smaller model
+                    _embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
+                except:
+                     # Fallback 2: Try completely offline mode if model exists in cache
+                     print("[PHANTOM] Network failed. Checking local cache only...")
+                     _embedder = SentenceTransformer(model_name, device='cpu', local_files_only=True)
+
             print("[PHANTOM] Embedding Model Loaded.")
         except Exception as e:
              print(f"[PHANTOM] Model Load Failed: {e}")
@@ -160,24 +155,31 @@ def index_document(chunks_data: list, filename: str):
     ids = [f"{filename}_{uuid.uuid4()}" for _ in valid_chunks]
     
     # Batch processing to avoid hitting limits
-    BATCH_SIZE = 100
+    BATCH_SIZE = 10
     total_chunks = len(texts)
     
     print(f"[MEMORY] Indexing {total_chunks} chunks from {filename} with spatial data...")
     
     for i in range(0, total_chunks, BATCH_SIZE):
+        print(f"  [RAG DEBUG] Batch {i} to {i+BATCH_SIZE} start...", flush=True)
         batch_texts = texts[i:i+BATCH_SIZE]
         batch_metas = metadatas[i:i+BATCH_SIZE]
         batch_ids = ids[i:i+BATCH_SIZE]
         
-        embeddings = embedder.encode(batch_texts).tolist()
-        
-        collection.add(
-            documents=batch_texts,
-            embeddings=embeddings,
-            metadatas=batch_metas,
-            ids=batch_ids
-        )
+        try:
+            print("  [RAG DEBUG] Encoding...", flush=True)
+            embeddings = embedder.encode(batch_texts).tolist()
+            print("  [RAG DEBUG] Adding to Chroma...", flush=True)
+            collection.add(
+                documents=batch_texts,
+                embeddings=embeddings,
+                metadatas=batch_metas,
+                ids=batch_ids
+            )
+            print("  [RAG DEBUG] Batch done.", flush=True)
+        except Exception as e:
+            print(f"  [RAG DEBUG] Batch Failed: {e}", flush=True)
+            raise e
     
     print(f"[MEMORY] Indexing Complete: {filename}")
 

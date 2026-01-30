@@ -14,3 +14,4 @@ export { MindPalace } from './overlays/MindPalace';
 export { VelvetOverlay } from './overlays/VelvetOverlay';
 export { FusionWorkspace } from './overlays/FusionWorkspace';
 export { ManualOverlay } from './overlays/ManualOverlay';
+export { default as ConfidantOverlay } from './overlays/ConfidantOverlay';

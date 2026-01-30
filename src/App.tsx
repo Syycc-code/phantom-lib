@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import PhantomIM from './components/PhantomIM';
+import P5LoadingScreen from './components/P5LoadingScreen';
 import { 
   SubwayOverlay, 
   ReaderOverlay, 
@@ -37,7 +38,8 @@ import {
   StatsOverlay,
   TransitionCurtain,
   CallingCard,
-  ManualOverlay
+  ManualOverlay,
+  ConfidantOverlay
 } from './components';
 import { HackProgress } from './components/shared/HackProgress';
 import { InputOverlay } from './components/overlays/InputOverlay';
@@ -174,6 +176,33 @@ function App() {
   // INIT AUDIO (MUST BE FIRST)
   const playSfx = useAudioSystem();
 
+  // --- BACKEND HEALTH CHECK ---
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  
+  useEffect(() => {
+      let intervalId: NodeJS.Timeout;
+      
+      const checkHealth = async () => {
+          try {
+              const res = await fetch('/api/monitor');
+              if (res.ok) {
+                  setIsBackendReady(true);
+                  if (intervalId) clearInterval(intervalId);
+              }
+          } catch (e) {
+              // Still waiting...
+          }
+      };
+
+      // Check immediately, then poll
+      checkHealth();
+      intervalId = setInterval(checkHealth, 1000);
+
+      return () => {
+          if (intervalId) clearInterval(intervalId);
+      };
+  }, []);
+
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });
@@ -251,6 +280,9 @@ function App() {
   const [readingPaper, setReadingPaper] = useState<Paper | null>(null);
   const [showMindPalace, setShowMindPalace] = useState(false);
   
+  // Confidant Overlay State (Full Screen Chat)
+  const [confidantData, setConfidantData] = useState<{ show: boolean, messages: any[], scope?: any }>({ show: false, messages: [] });
+
   const [fusionTargetIds, setFusionTargetIds] = useState<number[]>([]);
   const [isFusing, setIsFusing] = useState(false);
   const [fusionResult, setFusionResult] = useState<string | null>(null);
@@ -682,6 +714,11 @@ function App() {
                             equipped.theme === 'theme_hacker' ? '#00FF41' :
                             '#E60012';
 
+  // --- LOADING SCREEN ---
+  if (!isBackendReady) {
+      return <P5LoadingScreen />;
+  }
+
   return (
     <div 
         className={`flex h-screen w-screen bg-phantom-black overflow-hidden font-sans relative bg-halftone bg-noise transition-colors duration-1000 ${uiMode === 'safe' ? 'mode-safe' : ''} text-[var(--color-text)]`}
@@ -796,6 +833,14 @@ function App() {
       <AnimatePresence>
         {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} fontStyle={equipped.font_style} />}
         {showMindPalace && <MindPalace papers={papers} onClose={() => setShowMindPalace(false)} onRead={handleRead} playSfx={playSfx} />}
+        {confidantData.show && (
+            <ConfidantOverlay 
+                initialMessages={confidantData.messages} 
+                scope={confidantData.scope}
+                onClose={(updatedMsgs) => setConfidantData({ show: false, messages: updatedMsgs })} // Ideally pass back to IM, but for now just close
+                playSfx={playSfx} 
+            />
+        )}
         {fusionResult && fusionTargetIds.length === 2 && (
             <FusionWorkspace 
                 paperA={papers.find(p => p.id === fusionTargetIds[0])!} 
@@ -814,7 +859,14 @@ function App() {
                 activeMenu.startsWith('folder_') 
                 ? { folder_id: parseInt(activeMenu.split('_')[1]), name: folders.find(f => f.id === activeMenu.split('_')[1])?.name } 
                 : undefined
-            } 
+            }
+            onExpand={(msgs) => setConfidantData({ 
+                show: true, 
+                messages: msgs,
+                scope: activeMenu.startsWith('folder_') 
+                ? { folder_id: parseInt(activeMenu.split('_')[1]), name: folders.find(f => f.id === activeMenu.split('_')[1])?.name } 
+                : undefined
+            })} 
           />
       )}
     </div>

@@ -1,6 +1,10 @@
 from fastapi import APIRouter
 from app.core.config import settings
 import time
+import os
+import signal
+import threading
+import sys
 
 router = APIRouter()
 
@@ -22,3 +26,17 @@ async def get_system_monitor():
             system_metrics["ai_state"] = "TIMEOUT"
     
     return system_metrics
+
+@router.post("/monitor/shutdown")
+async def shutdown():
+    """Gracefully shutdown the server"""
+    print("[SYSTEM] Received SHUTDOWN command.")
+    
+    def kill():
+        time.sleep(1)
+        print("[SYSTEM] Exiting process...")
+        # Use os._exit to force kill fast, or sys.exit for cleanup
+        os._exit(0)
+    
+    threading.Thread(target=kill).start()
+    return {"status": "SHUTTING_DOWN"}

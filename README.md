@@ -1,4 +1,4 @@
-# Phantom Library V1.0
+# Phantom Library
 
 **Phantom Library** 是一个集成了 DeepSeek 大模型与 RAG（检索增强生成）技术的智能文献管理系统。它结合了现代化的 React 前端与高性能 FastAPI 后端，旨在为研究人员提供高效的论文阅读、管理与分析体验。
 
@@ -62,6 +62,7 @@ DEEPSEEK_API_KEY=sk-your-key-here
 
 ### 2. 启动系统 (Windows)
 直接双击运行根目录下的 **`start_phantom.bat`** 脚本。
+*   **自动更新**：启动时会自动检查 GitHub 是否有新版本，并询问是否更新。
 *   自动启动后端服务 (Port 8000)
 *   自动启动前端界面 (Port 5173)
 
@@ -81,6 +82,15 @@ npm run dev
 ```
 
 访问地址：http://localhost:5173
+
+---
+
+## 🔄 自动更新
+
+Phantom Library 内置了自动更新功能。每次运行 `start_phantom.bat` 时，系统会：
+1.  自动检查 GitHub Releases 中的最新版本。
+2.  对比本地版本，如果发现新版本，会提示升级。
+3.  **安全升级**：更新过程会自动保护您的数据库、配置文件和上传的论文，仅覆盖程序代码。
 
 ---
 

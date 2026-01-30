@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, X, Smartphone, Loader2, Terminal, MessageCircle } from 'lucide-react';
+import { Send, X, Smartphone, Loader2, Terminal, MessageCircle, Maximize2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface Citation {
     index: number;
@@ -21,9 +25,10 @@ interface ChatMessage {
 interface PhantomIMProps {
     variant?: string; // 'default', 'sns', 'terminal'
     scope?: { folder_id: number; name?: string }; // NEW PROP
+    onExpand: (currentMessages: ChatMessage[]) => void;
 }
 
-export default function PhantomIM({ variant = 'default', scope }: PhantomIMProps) {
+export default function PhantomIM({ variant = 'default', scope, onExpand }: PhantomIMProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([
@@ -51,10 +56,28 @@ export default function PhantomIM({ variant = 'default', scope }: PhantomIMProps
     };
 
     const renderMessageWithCitations = (msg: ChatMessage) => {
-        if (msg.role === 'user') return msg.content;
+        // Render user messages with Markdown too
+        if (msg.role === 'user') {
+            return (
+                <div className="prose prose-invert max-w-none text-sm break-words whitespace-pre-wrap">
+                    <ReactMarkdown 
+                        remarkPlugins={[remarkMath]} 
+                        rehypePlugins={[rehypeKatex]}
+                    >
+                        {msg.content}
+                    </ReactMarkdown>
+                </div>
+            );
+        }
+        
+        // Preprocess LaTeX delimeters for AI response
+        // Replace \[ \] with $$ $$ and \( \) with $ $
+        let processedContent = msg.content
+            .replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$') // \[ ... \] -> $$ ... $$
+            .replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');   // \( ... \) -> $ ... $
         
         // Split content by citation markers [1], [2] etc.
-        const parts = msg.content.split(/(\[\d+\])/g);
+        const parts = processedContent.split(/(\[\d+\])/g);
         
         return parts.map((part, i) => {
             const match = part.match(/^\[(\d+)\]$/);
@@ -85,7 +108,36 @@ export default function PhantomIM({ variant = 'default', scope }: PhantomIMProps
                     );
                 }
             }
-            return part;
+            // Render text parts with Markdown
+            return (
+                <span key={i}>
+                    <ReactMarkdown 
+                        remarkPlugins={[remarkMath]} 
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                            // Use span for paragraphs to maintain inline flow with citations
+                            p: ({children}) => <span className="inline break-words whitespace-pre-wrap">{children}</span>,
+                            // Style code blocks
+                            code: ({className, children, ...props}) => {
+                                const match = /language-(\w+)/.exec(className || '')
+                                return match ? (
+                                    <code className={`${className} bg-gray-800 text-white p-1 rounded block overflow-x-auto`} {...props}>
+                                        {children}
+                                    </code>
+                                ) : (
+                                    <code className="bg-gray-800/50 px-1 rounded break-all" {...props}>
+                                        {children}
+                                    </code>
+                                )
+                            },
+                            // Limit image size
+                            img: ({...props}) => <img className="max-w-full h-auto rounded" {...props} />,
+                        }}
+                    >
+                        {part}
+                    </ReactMarkdown>
+                </span>
+            );
         });
     };
 
@@ -257,9 +309,18 @@ export default function PhantomIM({ variant = 'default', scope }: PhantomIMProps
                                     </span>
                                 )}
                             </div>
-                            <div className={`w-3 h-3 rounded-full animate-pulse ${
-                                variant === 'terminal' ? 'bg-green-500' : 'bg-green-400'
-                            }`} />
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onExpand(messages); }}
+                                    className="p-1 hover:bg-white/20 rounded transition-colors"
+                                    title="Deep Dive (Full Screen)"
+                                >
+                                    <Maximize2 size={16} className={variant === 'terminal' ? 'text-green-500' : 'text-white'} />
+                                </button>
+                                <div className={`w-3 h-3 rounded-full animate-pulse ${
+                                    variant === 'terminal' ? 'bg-green-500' : 'bg-green-400'
+                                }`} />
+                            </div>
                         </div>
 
                         {/* Background Pattern */}
