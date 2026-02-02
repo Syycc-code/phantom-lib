@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ExternalLink, Zap, Brain } from 'lucide-react';
+import { X, Zap, Brain } from 'lucide-react';
 import type { Paper } from '../../types';
 
 interface MindPalaceProps {
@@ -36,29 +36,112 @@ const MAJOR_ARCANA = [
     { number: "XXI", name: "The World", meaning: "Completion, Travel" }
 ];
 
+// Local Tarot Card Images (User's custom deck in public/tarot/)
 const TAROT_IMAGES: Record<string, string> = {
-    "0": "https://upload.wikimedia.org/wikipedia/commons/9/90/RWS_Tarot_00_Fool.jpg",
-    "I": "https://upload.wikimedia.org/wikipedia/commons/d/de/RWS_Tarot_01_Magician.jpg",
-    "II": "https://upload.wikimedia.org/wikipedia/commons/8/88/RWS_Tarot_02_High_Priestess.jpg",
-    "III": "https://upload.wikimedia.org/wikipedia/commons/d/d2/RWS_Tarot_03_Empress.jpg",
-    "IV": "https://upload.wikimedia.org/wikipedia/commons/c/c3/RWS_Tarot_04_Emperor.jpg",
-    "V": "https://upload.wikimedia.org/wikipedia/commons/8/8d/RWS_Tarot_05_Hierophant.jpg",
-    "VI": "https://upload.wikimedia.org/wikipedia/commons/d/db/RWS_Tarot_06_Lovers.jpg",
-    "VII": "https://upload.wikimedia.org/wikipedia/commons/9/9b/RWS_Tarot_07_Chariot.jpg",
-    "VIII": "https://upload.wikimedia.org/wikipedia/commons/f/f5/RWS_Tarot_08_Strength.jpg",
-    "IX": "https://upload.wikimedia.org/wikipedia/commons/4/4d/RWS_Tarot_09_Hermit.jpg",
-    "X": "https://upload.wikimedia.org/wikipedia/commons/3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg",
-    "XI": "https://upload.wikimedia.org/wikipedia/commons/e/e0/RWS_Tarot_11_Justice.jpg",
-    "XII": "https://upload.wikimedia.org/wikipedia/commons/2/2b/RWS_Tarot_12_Hanged_Man.jpg",
-    "XIII": "https://upload.wikimedia.org/wikipedia/commons/d/d7/RWS_Tarot_13_Death.jpg",
-    "XIV": "https://upload.wikimedia.org/wikipedia/commons/f/f8/RWS_Tarot_14_Temperance.jpg",
-    "XV": "https://upload.wikimedia.org/wikipedia/commons/5/55/RWS_Tarot_15_Devil.jpg",
-    "XVI": "https://upload.wikimedia.org/wikipedia/commons/5/53/RWS_Tarot_16_Tower.jpg",
-    "XVII": "https://upload.wikimedia.org/wikipedia/commons/d/db/RWS_Tarot_17_Star.jpg",
-    "XVIII": "https://upload.wikimedia.org/wikipedia/commons/7/7f/RWS_Tarot_18_Moon.jpg",
-    "XIX": "https://upload.wikimedia.org/wikipedia/commons/1/17/RWS_Tarot_19_Sun.jpg",
-    "XX": "https://upload.wikimedia.org/wikipedia/commons/d/dd/RWS_Tarot_20_Judgement.jpg",
-    "XXI": "https://upload.wikimedia.org/wikipedia/commons/f/ff/RWS_Tarot_21_World.jpg"
+    "0": "/tarot/arcana_0.avif",
+    "I": "/tarot/arcana_I.avif",
+    "II": "/tarot/arcana_II.avif",
+    "III": "/tarot/arcana_III.avif",
+    "IV": "/tarot/arcana_IV.avif",
+    "V": "/tarot/arcana_V.avif",
+    "VI": "/tarot/arcana_VI.avif",
+    "VII": "/tarot/arcana_VII.avif",
+    "VIII": "/tarot/arcana_VIII.avif",
+    "IX": "/tarot/arcana_IX.avif",
+    "X": "/tarot/arcana_X.avif",
+    "XI": "/tarot/arcana_XI.avif",
+    "XII": "/tarot/arcana_XII.avif",
+    "XIII": "/tarot/arcana_XIII.webp",
+    "XIV": "/tarot/arcana_XIV.avif",
+    "XV": "/tarot/arcana_XV.webp",
+    "XVI": "/tarot/arcana_XVI.avif",
+    "XVII": "/tarot/arcana_XVII.avif",
+    "XVIII": "/tarot/arcana_XVIII.avif",
+    "XIX": "/tarot/arcana_XIX.avif",
+    "XX": "/tarot/arcana_XX.webp",
+    "XXI": "/tarot/arcana_XXI.avif"
+};
+
+// Enhanced P5-style SVG Tarot Cards with detailed designs (fallback)
+const generateTarotCard = (arcana: typeof MAJOR_ARCANA[0]) => {
+    // P5 color palette for each arcana
+    const arcanaStyles: Record<string, { primary: string; secondary: string; symbol: string }> = {
+        "0": { primary: "#E60012", secondary: "#FFD700", symbol: "★" },
+        "I": { primary: "#9B59B6", secondary: "#E74C3C", symbol: "◆" },
+        "II": { primary: "#3498DB", secondary: "#ECF0F1", symbol: "◐" },
+        "III": { primary: "#2ECC71", secondary: "#F39C12", symbol: "♣" },
+        "IV": { primary: "#E74C3C", secondary: "#34495E", symbol: "♦" },
+        "V": { primary: "#95A5A6", secondary: "#BDC3C7", symbol: "⊕" },
+        "VI": { primary: "#E91E63", secondary: "#FF6B9D", symbol: "♥" },
+        "VII": { primary: "#FF5722", secondary: "#FFAB00", symbol: "▲" },
+        "VIII": { primary: "#8BC34A", secondary: "#CDDC39", symbol: "♠" },
+        "IX": { primary: "#795548", secondary: "#A1887F", symbol: "◉" },
+        "X": { primary: "#FFC107", secondary: "#FF9800", symbol: "◎" },
+        "XI": { primary: "#00BCD4", secondary: "#0097A7", symbol: "⚖" },
+        "XII": { primary: "#673AB7", secondary: "#9575CD", symbol: "⌘" },
+        "XIII": { primary: "#212121", secondary: "#616161", symbol: "☠" },
+        "XIV": { primary: "#009688", secondary: "#4DB6AC", symbol: "⚗" },
+        "XV": { primary: "#D32F2F", secondary: "#C62828", symbol: "⛧" },
+        "XVI": { primary: "#FF6F00", secondary: "#F57C00", symbol: "⚡" },
+        "XVII": { primary: "#1976D2", secondary: "#64B5F6", symbol: "✦" },
+        "XVIII": { primary: "#5E35B1", secondary: "#9575CD", symbol: "☾" },
+        "XIX": { primary: "#FFB300", secondary: "#FDD835", symbol: "☀" },
+        "XX": { primary: "#D81B60", secondary: "#EC407A", symbol: "⚔" },
+        "XXI": { primary: "#00897B", secondary: "#26A69A", symbol: "🌍" }
+    };
+    
+    const style = arcanaStyles[arcana.number] || arcanaStyles["0"];
+    
+    return `data:image/svg+xml,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 320" style="background:#0a0a0a">
+            <defs>
+                <linearGradient id="bg${arcana.number}" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:${style.primary};stop-opacity:0.2" />
+                    <stop offset="50%" style="stop-color:#000;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:${style.secondary};stop-opacity:0.2" />
+                </linearGradient>
+                <radialGradient id="glow${arcana.number}">
+                    <stop offset="0%" style="stop-color:${style.primary};stop-opacity:0.4" />
+                    <stop offset="100%" style="stop-color:${style.primary};stop-opacity:0" />
+                </radialGradient>
+                <filter id="shadow">
+                    <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="${style.primary}" flood-opacity="0.6"/>
+                </filter>
+            </defs>
+            
+            <!-- Background -->
+            <rect width="200" height="320" fill="url(#bg${arcana.number})"/>
+            
+            <!-- Border Frame (P5 style angular) -->
+            <path d="M 10,10 L 190,10 L 190,310 L 10,310 Z" fill="none" stroke="${style.primary}" stroke-width="2" opacity="0.6"/>
+            <path d="M 15,15 L 185,15 L 185,305 L 15,305 Z" fill="none" stroke="${style.secondary}" stroke-width="1" opacity="0.4"/>
+            
+            <!-- Top decorative element -->
+            <path d="M 100,30 L 80,50 L 120,50 Z" fill="${style.primary}" opacity="0.8"/>
+            <circle cx="100" cy="30" r="15" fill="url(#glow${arcana.number})"/>
+            
+            <!-- Central Arcana Number (Large & Bold) -->
+            <text x="100" y="180" text-anchor="middle" font-family="Georgia, serif" font-size="90" font-weight="bold" 
+                  fill="${style.primary}" opacity="0.9" filter="url(#shadow)">${arcana.number}</text>
+            
+            <!-- Symbol overlay -->
+            <text x="100" y="140" text-anchor="middle" font-size="40" fill="${style.secondary}" opacity="0.5">${style.symbol}</text>
+            
+            <!-- Bottom Name Label -->
+            <rect x="20" y="270" width="160" height="30" fill="#000" opacity="0.7"/>
+            <text x="100" y="292" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" 
+                  fill="#fff" letter-spacing="2">${arcana.name.toUpperCase()}</text>
+            
+            <!-- Corner accents (P5 style angular cuts) -->
+            <path d="M 10,10 L 30,10 L 10,30 Z" fill="${style.primary}" opacity="0.5"/>
+            <path d="M 190,10 L 170,10 L 190,30 Z" fill="${style.primary}" opacity="0.5"/>
+            <path d="M 10,310 L 30,310 L 10,290 Z" fill="${style.secondary}" opacity="0.5"/>
+            <path d="M 190,310 L 170,310 L 190,290 Z" fill="${style.secondary}" opacity="0.5"/>
+            
+            <!-- Radial glow effect in center -->
+            <circle cx="100" cy="160" r="80" fill="url(#glow${arcana.number})"/>
+        </svg>
+    `)}`;
 };
 
 // --- TYPES ---
@@ -148,7 +231,7 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
 
     // Mutable state for physics simulation
     const simulationNodes = useRef(nodes);
-    const [renderTrigger, setRenderTrigger] = useState(0);
+    const [, setRenderTrigger] = useState(0);
 
     // 2. Physics Engine (Custom RAF Loop)
     useEffect(() => {
@@ -383,28 +466,30 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                                     ? 'border-phantom-red shadow-[0_0_30px_#f00] scale-110' 
                                     : 'border-white/50 group-hover:border-phantom-red group-hover:shadow-[0_0_15px_#E60012]'
                         }`}>
-                            {/* Card Image */}
-                            {node.arcana && TAROT_IMAGES[node.arcana.number] ? (
-                                <img 
-                                    src={TAROT_IMAGES[node.arcana.number]} 
-                                    alt={node.arcana.name} 
-                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                                />
+                            {/* Rider-Waite Tarot Image (with P5 SVG fallback) */}
+                            {node.arcana ? (
+                                TAROT_IMAGES[node.arcana.number] ? (
+                                    <img 
+                                        src={TAROT_IMAGES[node.arcana.number]} 
+                                        alt={node.arcana.name} 
+                                        className="w-full h-full object-cover opacity-95 group-hover:opacity-100 transition-opacity"
+                                        onError={(e) => {
+                                            // Fallback to enhanced SVG if real image fails
+                                            e.currentTarget.src = generateTarotCard(node.arcana!);
+                                        }}
+                                    />
+                                ) : (
+                                    <img 
+                                        src={generateTarotCard(node.arcana)} 
+                                        alt={node.arcana.name} 
+                                        className="w-full h-full object-cover opacity-95 group-hover:opacity-100 transition-opacity"
+                                    />
+                                )
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-white/20">
                                     <Brain size={40} />
                                 </div>
                             )}
-
-                            {/* Overlay info (Always visible but subtle, pops on hover) */}
-                            <div className="absolute inset-0 flex flex-col justify-between p-2 bg-gradient-to-b from-black/60 via-transparent to-black/80">
-                                <div className="text-center font-serif text-white/90 text-xs tracking-widest border-b border-white/20 pb-1">
-                                    {node.arcana?.number}
-                                </div>
-                                <div className="text-center font-p5 text-white text-sm tracking-wide uppercase pt-1 border-t border-white/20">
-                                    {node.arcana?.name}
-                                </div>
-                            </div>
                         </div>
                     </motion.div>
                 ))}

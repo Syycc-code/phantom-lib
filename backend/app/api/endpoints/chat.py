@@ -22,6 +22,8 @@ class ChatRequest(BaseModel):
     query: str
     history: Optional[List[dict]] = []
     scope: Optional[dict] = None # { folder_id: 123 }
+    paper_ids: Optional[List[int]] = [] # Selected paper IDs from sources panel
+    use_web_search: Optional[bool] = False # Deep research mode toggle
 
 class MindHackRequest(BaseModel):
     text: str
@@ -47,40 +49,17 @@ async def chat_stream(
             file_filter = None
             scope_info = "Current Scope: GLOBAL (Searching all files)."
             
-            # --- FEATURE: Smart Query Translation ---
-            search_query = request.query
-            try:
-                # Detect if query contains Chinese characters
-                import re
-                if re.search(r'[\u4e00-\u9fff]', request.query):
-                    print(f"[CHAT] Detected Chinese query. Translating/Expanding...")
-                    system_metrics["ai_state"] = "TRANSLATING"
-                    yield f"data: {json.dumps({'content': '🌐 [Translating Query]...\\n'}, ensure_ascii=False)}\n\n"
-                    
-                    trans_prompt = (
-                        "You are a translation engine for an academic search system. "
-                        "Convert the following Chinese query into English keywords and a concise English question. "
-                        "Output ONLY the English text, no explanations."
-                    )
-                    trans_res = await deepseek_client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=[
-                            {"role": "system", "content": trans_prompt},
-                            {"role": "user", "content": request.query}
-                        ],
-                        stream=False
-                    )
-                    translated_q = trans_res.choices[0].message.content.strip()
-                    print(f"[CHAT] Translated: '{request.query}' -> '{translated_q}'")
-                    # Combine original + translated for maximum recall
-                    search_query = f"{translated_q}" 
-            except Exception as e:
-                print(f"[CHAT] Translation Failed: {e}")
-                
-            system_metrics["ai_state"] = "THINKING"
-            # ----------------------------------------
-            
-            if request.scope and request.scope.get('folder_id'):
+            # --- PRIORITY 1: Use paper_ids if provided (user selected sources) ---
+            if request.paper_ids and len(request.paper_ids) > 0:
+                file_filter = [str(pid) for pid in request.paper_ids]
+                # Fetch paper titles for scope info
+                selected_papers = session.exec(select(Paper).where(Paper.id.in_(request.paper_ids))).all()
+                if selected_papers:
+                    paper_titles = ", ".join([f"'{p.title}'" for p in selected_papers])
+                    scope_info = f"Current Scope: USER SELECTED {len(selected_papers)} source(s): [{paper_titles}]."
+                    print(f"[CHAT] Using user-selected papers: {file_filter}")
+            # --- PRIORITY 2: Use folder scope if no paper_ids ---
+            elif request.scope and request.scope.get('folder_id'):
                 folder_id = request.scope['folder_id']
                 folder_name = request.scope.get('name', 'Unknown Folder')
                 # Get all paper IDs in this folder
@@ -163,13 +142,16 @@ async def chat_stream(
             # 2. Web Search
             sources = list(set(sources + [c.get('source', 'Unknown') for c in citations])) # Merge sources
             
-            # Only search web if context is truly empty
-            # (Check if we added abstracts or RAG results)
+            # Search web if:
+            # 1. Context is truly empty (fallback), OR
+            # 2. User explicitly enabled Deep Research mode
             is_context_empty = not context_text.strip()
+            should_search_web = (is_context_empty or request.use_web_search) and SEARCH_AVAILABLE
             
-            if is_context_empty and SEARCH_AVAILABLE:
+            if should_search_web:
                 system_metrics["ai_state"] = "SEARCHING"
-                yield f"data: {json.dumps({'content': '🔍 [Searching Web]...\\n'}, ensure_ascii=False)}\n\n"
+                search_reason = "No local context found" if is_context_empty else "Deep Research enabled"
+                yield f"data: {json.dumps({'content': f'🔍 [{search_reason}] Searching Web...\\n'}, ensure_ascii=False)}\n\n"
                 web_res = await asyncio.to_thread(perform_web_search, request.query)
                 if web_res:
                     final_context += f"\n\n【Web Intel】\n{web_res}"
