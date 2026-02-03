@@ -243,3 +243,188 @@ body {
   background: #eee;
   color: #d63384;
 }
+
+/* ========== KaTeX 数学公式白色样式 ========== */
+/* 强制 KaTeX 公式在 ConfidantOverlay 和 PhantomIM 中显示为白色 */
+/* 使用超高优先级，覆盖所有可能的样式 */
+.prose .katex,
+.prose .katex *,
+.prose-invert .katex,
+.prose-invert .katex *,
+.katex,
+.katex * {
+  color: white !important;
+  fill: white !important;
+}
+
+/* 确保数学公式在黑色背景上清晰可见 */
+.prose .katex-display,
+.prose-invert .katex-display,
+.katex-display {
+  color: white !important;
+}
+
+.prose .katex .base,
+.prose-invert .katex .base,
+.katex .base {
+  color: white !important;
+}
+
+/* 针对行内公式 */
+.prose .katex-html,
+.prose-invert .katex-html,
+.katex-html {
+  color: white !important;
+}
+
+/* 覆盖所有可能的 KaTeX 元素 */
+.prose .katex .mord,
+.prose .katex .mbin,
+.prose .katex .mrel,
+.prose .katex .mopen,
+.prose .katex .mclose,
+.prose .katex .mpunct,
+.prose .katex .minner,
+.prose .katex .mop,
+.prose-invert .katex .mord,
+.prose-invert .katex .mbin,
+.prose-invert .katex .mrel,
+.prose-invert .katex .mopen,
+.prose-invert .katex .mclose,
+.prose-invert .katex .minner,
+.prose-invert .katex .mop,
+.katex .mord,
+.katex .mbin,
+.katex .mrel,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .minner,
+.katex .mop {
+  color: white !important;
+}
+
+/* 针对 SVG 元素（KaTeX 有时会用 SVG 渲染） */
+.prose .katex svg,
+.prose-invert .katex svg,
+.katex svg {
+  color: white !important;
+  fill: white !important;
+}
+
+.prose .katex svg *,
+.prose-invert .katex svg *,
+.katex svg * {
+  color: white !important;
+  fill: white !important;
+}
+
+/* 确保 span 元素也是白色 */
+.prose .katex span,
+.prose-invert .katex span,
+.katex span {
+  color: white !important;
+}
+
+/* ========== prose-invert 强制白色文本 ========== */
+/* 确保 prose-invert 下所有文本都是白色 */
+.prose-invert,
+.prose-invert * {
+  color: white !important;
+}
+
+.prose-invert p,
+.prose-invert span,
+.prose-invert div,
+.prose-invert li,
+.prose-invert h1,
+.prose-invert h2,
+.prose-invert h3,
+.prose-invert h4,
+.prose-invert h5,
+.prose-invert h6 {
+  color: white !important;
+}
+
+/* 保持特殊元素的颜色（如代码块、强调文本） */
+.prose-invert strong {
+  color: #FCEC0C !important; /* phantom-yellow */
+}
+
+.prose-invert code {
+  color: #FCEC0C !important;
+}
+
+.prose-invert a {
+  color: #E60012 !important; /* phantom-red */
+}
+
+/* 确保数学公式在黑色背景上清晰可见 */
+.prose .katex-display,
+.prose-invert .katex-display,
+.katex-display {
+  color: white !important;
+}
+
+.prose .katex .base,
+.prose-invert .katex .base,
+.katex .base {
+  color: white !important;
+}
+
+/* 针对行内公式 */
+.prose .katex-html,
+.prose-invert .katex-html,
+.katex-html {
+  color: white !important;
+}
+
+/* 覆盖所有可能的 KaTeX 元素 */
+.prose .katex .mord,
+.prose .katex .mbin,
+.prose .katex .mrel,
+.prose .katex .mopen,
+.prose .katex .mclose,
+.prose .katex .mpunct,
+.prose .katex .minner,
+.prose .katex .mop,
+.prose-invert .katex .mord,
+.prose-invert .katex .mbin,
+.prose-invert .katex .mrel,
+.prose-invert .katex .mopen,
+.prose-invert .katex .mclose,
+.prose-invert .katex .mpunct,
+.prose-invert .katex .minner,
+.prose-invert .katex .mop,
+.katex .mord,
+.katex .mbin,
+.katex .mrel,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .minner,
+.katex .mop {
+  color: white !important;
+}
+
+/* 针对 SVG 元素（KaTeX 有时会用 SVG 渲染） */
+.prose .katex svg,
+.prose-invert .katex svg,
+.katex svg {
+  color: white !important;
+  fill: white !important;
+}
+
+.prose .katex svg *,
+.prose-invert .katex svg *,
+.katex svg * {
+  color: white !important;
+  fill: white !important;
+}
+
+/* 确保 span 元素也是白色 */
+.prose .katex span,
+.prose-invert .katex span,
+.katex span {
+  color: white !important;
+}

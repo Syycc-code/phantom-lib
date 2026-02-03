@@ -63,27 +63,50 @@ async def process_paper(
     session.refresh(new_paper)
     
     try:
-        # 4. 触发后台任务（添加安全检查）
+        # 4. 触发后台任务（添加安全检查和崩溃保护）
         # 将同步的 index_document 放入线程池，避免阻塞
         # Updated: Pass chunks (with bbox) instead of raw text
         # CRITICAL: Use Paper ID as source for RAG to allow filtering by Folder
         rag_source = str(new_paper.id)
-        asyncio.create_task(asyncio.to_thread(_safe_index_document, chunks, rag_source))
+        
+        # Create task with exception handler
+        index_task = asyncio.create_task(asyncio.to_thread(_safe_index_document, chunks, rag_source))
+        index_task.add_done_callback(_task_exception_handler)
         
         # 只在有ID和abstract时触发分析
         if new_paper.id and new_paper.abstract:
-            asyncio.create_task(_run_analysis(new_paper.id, new_paper.abstract, session.bind))
+            analysis_task = asyncio.create_task(_run_analysis(new_paper.id, new_paper.abstract, session.bind))
+            analysis_task.add_done_callback(_task_exception_handler)
     except Exception as e:
-        print(f"[PROCESS ERROR] Background tasks failed: {e}")
+        print(f"[PROCESS ERROR] Background tasks failed to start: {e}")
+        import traceback
+        traceback.print_exc()
     
     return new_paper
 
 def _safe_index_document(chunks: list, filename: str):
     """Wrapper to prevent RAG crashes from killing the app"""
     try:
+        print(f"[RAG] Starting background indexing for: {filename}")
         index_document(chunks, filename)
+        print(f"[RAG] Background indexing completed for: {filename}")
     except Exception as e:
+        import traceback
         print(f"[RAG INDEX ERROR] Failed to index {filename}: {e}")
+        print(f"[RAG INDEX ERROR] Traceback:")
+        traceback.print_exc()
+        # Don't re-raise - just log and continue
+
+def _task_exception_handler(task):
+    """Handle exceptions from background tasks to prevent crashes"""
+    try:
+        # This will raise if the task had an exception
+        task.result()
+    except Exception as e:
+        import traceback
+        print(f"[BACKGROUND TASK ERROR] Unhandled exception in async task: {e}")
+        traceback.print_exc()
+        # Don't re-raise - server should continue running
 
 
 async def _run_analysis(paper_id: int, abstract: str, engine):

@@ -218,8 +218,13 @@ const MiddlePane = ({ activeMenu, papers, selectedId, onSelect, onAddPaper, onDe
                 className="hidden" 
                 onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
-                        onBulkImport(e.target.files);
+                        // CRITICAL FIX: Convert FileList to Array BEFORE resetting input
+                        // Otherwise FileList becomes invalid during async upload
+                        const filesArray = Array.from(e.target.files);
                         e.target.value = ''; 
+                        // Create FileList-like object from array
+                        const filesListLike = Object.assign(filesArray, { length: filesArray.length }) as unknown as FileList;
+                        onBulkImport(filesListLike);
                     }
                 }} 
             />

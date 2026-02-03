@@ -2,7 +2,7 @@
 
 **Phantom Library** 是一个集成了 DeepSeek 大模型与 RAG（检索增强生成）技术的智能文献管理系统。它结合了现代化的 React 前端与高性能 FastAPI 后端，旨在为研究人员提供高效的论文阅读、管理与分析体验。
 
-![License](https://img.shields.io/badge/license-MIT-blue) ![Version](https://img.shields.io/badge/version-1.0.0-green) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
+![License](https://img.shields.io/badge/license-MIT-blue) ![Version](https://img.shields.io/badge/version-1.1.0-green) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
 
 ---
 
@@ -112,4 +112,41 @@ Phantom Library 内置了自动更新功能。每次运行 `start_phantom.bat` �
 
 ---
 
-**License**: MIT | **Version**: 1.0.0
+## 📝 更新日志 (Changelog)
+
+### v1.1.0 (2025-02-03)
+#### 新功能
+- **📊 AI 助手工具箱 (Studio Tools)**：新增 8 个专业学术工具
+  - 思维导图 (Mind Map) - 生成可交互的 Mermaid 知识图谱
+  - 信息图 (Info Map) - 将概念转化为可视化流程图
+  - 学术报告 (Report) - 自动生成长篇学术论文
+  - 知识卡片 (Flashcards) - 创建记忆卡片组
+  - 学术海报 (Poster) - 生成会议海报布局
+  - PPT 大纲 (Presentation) - 制作演示文稿
+  - 音频脚本 (Audio) - 播客/音频课程脚本
+  - 视频脚本 (Video) - 教育视频剧本
+- **🔍 智能引用跳转**：AI 助手中的引用支持点击跳转到原文
+- **✨ 批量上传优化**：修复了多文件上传只处理第一个文件的问题
+
+#### 优化与修复
+- 大幅优化了 RAG 向量数据库的稳定性和错误处理
+- 降低了批量索引的内存占用（Batch Size: 10→1）
+- 增强了 AI 聊天界面中数学公式的可读性
+- 修复了多个后端并发处理导致的崩溃问题
+- 后端默认端口从 8000 改为 8002 避免冲突
+
+#### 依赖更新
+- 新增：Mermaid 图表库 (^11.12.2)
+- 新增：React-Mermaid2 组件 (^0.1.4)
+
+### v1.0.0 (2025-02-02)
+- 🎉 **Phantom Library 正式发布！**
+- 完整的文献管理与 AI 辅助阅读系统
+- DeepSeek API 集成实现智能问答
+- ChromaDB 向量存储实现全文检索
+- 3D 知识图谱可视化 (Three.js + React Three Fiber)
+- Persona 5 主题 UI 设计
+
+---
+
+**License**: MIT | **Version**: 1.1.0

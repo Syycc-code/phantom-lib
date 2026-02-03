@@ -53,45 +53,34 @@ async def chat_stream(
             if request.paper_ids and len(request.paper_ids) > 0:
                 file_filter = [str(pid) for pid in request.paper_ids]
                 # Fetch paper titles for scope info
-                try:
-                    from sqlmodel import col
-                    selected_papers = session.exec(select(Paper).where(col(Paper.id).in_(request.paper_ids))).all()
-                    if selected_papers:
-                        paper_titles = ", ".join([f"'{p.title}'" for p in selected_papers])
-                        scope_info = f"Current Scope: USER SELECTED {len(selected_papers)} source(s): [{paper_titles}]."
-                        print(f"[CHAT] Using user-selected papers: {file_filter}")
-                except Exception as e:
-                    print(f"[CHAT] Error fetching selected papers: {e}")
-                    
+                selected_papers = session.exec(select(Paper).where(Paper.id.in_(request.paper_ids))).all()
+                if selected_papers:
+                    paper_titles = ", ".join([f"'{p.title}'" for p in selected_papers])
+                    scope_info = f"Current Scope: USER SELECTED {len(selected_papers)} source(s): [{paper_titles}]."
+                    print(f"[CHAT] Using user-selected papers: {file_filter}")
             # --- PRIORITY 2: Use folder scope if no paper_ids ---
             elif request.scope and request.scope.get('folder_id'):
                 folder_id = request.scope['folder_id']
                 folder_name = request.scope.get('name', 'Unknown Folder')
                 # Get all paper IDs in this folder
-                try:
-                    papers = session.exec(select(Paper).where(Paper.folder_id == int(folder_id))).all()
-                    if papers:
-                        file_filter = [str(p.id) for p in papers]
-                        paper_titles = ", ".join([f"'{p.title}'" for p in papers])
-                        scope_info = f"Current Scope: Folder '{folder_name}'. Contains {len(papers)} files: [{paper_titles}]."
-                        print(f"[CHAT] Scope: Folder {folder_id} -> Papers: {file_filter}")
-                    else:
-                        scope_info = f"Current Scope: Folder '{folder_name}'. This folder is EMPTY."
-                        print(f"[CHAT] Scope: Folder {folder_id} is empty.")
-                        file_filter = ["__empty__"] # Force no results
-                except Exception as e:
-                    print(f"[CHAT] Error in folder scope: {e}")
+                papers = session.exec(select(Paper).where(Paper.folder_id == int(folder_id))).all()
+                if papers:
+                    file_filter = [str(p.id) for p in papers]
+                    paper_titles = ", ".join([f"'{p.title}'" for p in papers])
+                    scope_info = f"Current Scope: Folder '{folder_name}'. Contains {len(papers)} files: [{paper_titles}]."
+                    print(f"[CHAT] Scope: Folder {folder_id} -> Papers: {file_filter}")
+                else:
+                    scope_info = f"Current Scope: Folder '{folder_name}'. This folder is EMPTY."
+                    print(f"[CHAT] Scope: Folder {folder_id} is empty.")
+                    file_filter = ["__empty__"] # Force no results
             else:
                 # Global Scope - Count total files
-                try:
-                    total_count = session.exec(select(Paper)).all()
-                    scope_info = f"Current Scope: GLOBAL. Knowledge Base contains {len(total_count)} files."
-                except Exception as e:
-                    print(f"[CHAT] Error counting papers: {e}")
+                total_count = session.exec(select(Paper)).all() # Optimize later with count()
+                scope_info = f"Current Scope: GLOBAL. Knowledge Base contains {len(total_count)} files."
 
-            context_text = ""
             if RAG_AVAILABLE:
                 try:
+                    # Updated retrieve_context returns (text, citations_list)
                     # Use request.query for RAG search
                     context_text, citations = await asyncio.to_thread(retrieve_context, request.query, file_filter=file_filter)
                     print(f"[CHAT] RAG Complete. Citations found: {len(citations)}")
@@ -99,20 +88,22 @@ async def chat_stream(
                     # --- FIX: Map Source ID to Paper Title ---
                     if citations:
                         # Extract IDs (assuming source is numeric ID string)
-                        paper_ids_list = []
+                        paper_ids = []
                         for c in citations:
                             if c['source'].isdigit():
-                                paper_ids_list.append(int(c['source']))
+                                paper_ids.append(int(c['source']))
                         
-                        if paper_ids_list:
+                        if paper_ids:
                             # Fetch titles from DB
+                            # Use session.exec directly
+                            from sqlmodel import col
+                            paper_map = {}
                             try:
-                                from sqlmodel import col
-                                db_papers = session.exec(select(Paper).where(col(Paper.id).in_(paper_ids_list))).all()
+                                # Safe query
+                                db_papers = session.exec(select(Paper).where(col(Paper.id).in_(paper_ids))).all()
                                 paper_map = {str(p.id): p.title for p in db_papers}
                             except Exception as db_e:
                                 print(f"[CHAT] Failed to map titles: {db_e}")
-                                paper_map = {}
 
                             # Update Citations
                             for c in citations:
@@ -122,8 +113,6 @@ async def chat_stream(
 
                 except Exception as e:
                     print(f"[CHAT] RAG Failed: {e}")
-                    import traceback
-                    traceback.print_exc()
                     context_text = ""
             else:
                 context_text = ""
@@ -133,30 +122,24 @@ async def chat_stream(
 
             # 1.5 ABSTRACT FALLBACK (Smart Context)
             # If RAG found nothing (or very little), and we have specific papers selected,
-            # inject their abstracts directly.
+            # inject their abstracts directly. This handles "Summarize this" queries perfectly.
+            papers_for_fallback = []
+            
+            # Get papers from either scope or paper_ids
             if (not citations or len(citations) == 0):
-                papers_for_fallback = []
-                
-                # Get papers for fallback
-                if request.paper_ids and len(request.paper_ids) > 0:
+                if request.scope and request.scope.get('folder_id'):
+                    # Folder scope - papers variable already exists from line 66
+                    if 'papers' in locals() and papers and len(papers) <= 5:
+                        papers_for_fallback = papers
+                elif request.paper_ids and len(request.paper_ids) > 0:
                     # User-selected papers
                     print("[CHAT] RAG empty. Fetching abstracts for selected papers...")
                     try:
-                        from sqlmodel import col
-                        selected_papers = session.exec(select(Paper).where(col(Paper.id).in_(request.paper_ids))).all()
+                        selected_papers = session.exec(select(Paper).where(Paper.id.in_(request.paper_ids))).all()
                         if selected_papers and len(selected_papers) <= 5:
                             papers_for_fallback = selected_papers
                     except Exception as e:
                         print(f"[CHAT] Failed to fetch selected papers: {e}")
-                elif request.scope and request.scope.get('folder_id'):
-                    # Folder scope
-                    try:
-                        folder_id = request.scope['folder_id']
-                        folder_papers = session.exec(select(Paper).where(Paper.folder_id == int(folder_id))).all()
-                        if folder_papers and len(folder_papers) <= 5:
-                            papers_for_fallback = folder_papers
-                    except Exception as e:
-                        print(f"[CHAT] Failed to fetch folder papers: {e}")
                 
                 # Inject abstracts as fallback
                 if papers_for_fallback:
@@ -247,6 +230,8 @@ async def mind_hack(request: MindHackRequest):
             # request.text here is assumed to be the abstract or full text
             result = await analyze_paper_content(request.text)
             # Convert JSON result to string for display or further processing
+            # Or just return the raw JSON if frontend expects it
+            # For compatibility with frontend expecting {"result": str}, we format it:
             formatted_res = (
                 f"TAGS: {', '.join(result.get('tags', []))}\n\n"
                 f"SHADOW: {result.get('shadow_problem')}\n"

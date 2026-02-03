@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Zap, Brain } from 'lucide-react';
+import { X, Zap, Brain, Calendar, Filter, Grid3x3, Box } from 'lucide-react';
 import type { Paper } from '../../types';
+import { MindPalace3D } from './MindPalace3D';
 
 interface MindPalaceProps {
     papers: Paper[];
@@ -162,14 +163,309 @@ interface Link {
     strength: number; // 0-1
 }
 
+// 四叉树节点类型
+interface QuadTreeNode {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    nodes: Node[];
+    children?: QuadTreeNode[];
+}
+
+// 视图模式类型
+type ViewMode = 'force' | 'timeline' | 'cluster';
+
+// 聚类类型
+type ClusterMode = 'none' | 'folder' | 'tag' | 'year';
+
+// 从文件名提取年月信息 (格式: YYMM开头，如 2512.15745v1)
+const extractDateFromFilename = (filename: string): { year: string; month: string; yearMonth: string } | null => {
+    // 去掉扩展名，只保留文件名部分
+    const nameOnly = filename.replace(/\.(pdf|txt|docx?|png|jpe?g)$/i, '');
+    
+    // 匹配开头的4位数字 (YYMM)
+    const match = nameOnly.match(/^(\d{4})/);
+    if (match) {
+        const yymm = match[1];
+        const yy = yymm.substring(0, 2);
+        const mm = yymm.substring(2, 4);
+        
+        // 转换为完整年份 (假设 20YY)
+        const fullYear = `20${yy}`;
+        const monthNum = parseInt(mm, 10);
+        
+        // 验证月份有效性
+        if (monthNum >= 1 && monthNum <= 12) {
+            return {
+                year: fullYear,
+                month: mm,
+                yearMonth: `${fullYear}-${mm}`
+            };
+        }
+    }
+    return null;
+};
+
+// 格式化月份显示
+const formatMonth = (yyyymm: string): string => {
+    const [year, month] = yyyymm.split('-');
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 
+                       'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const monthIdx = parseInt(month, 10) - 1;
+    return `${monthNames[monthIdx]} ${year}`;
+};
+
 function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+    const [viewMode, setViewMode] = useState<ViewMode>('force');
+    const [clusterMode, setClusterMode] = useState<ClusterMode>('none');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedYear, setSelectedYear] = useState<string | null>(null);
+    const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [show3D, setShow3D] = useState(false);
 
-    // 1. Initialize Nodes & Links
+    // 提取所有年份和标签
+    const { years, allTags } = useMemo(() => {
+        const yearSet = new Set<string>();
+        const tagSet = new Set<string>();
+        papers.forEach(p => {
+            if (p.year) yearSet.add(p.year);
+            p.tags.forEach(t => tagSet.add(t));
+        });
+        return {
+            years: Array.from(yearSet).sort(),
+            allTags: Array.from(tagSet).sort()
+        };
+    }, [papers]);
+
+    // 四叉树构建函数（性能优化）
+    const buildQuadTree = (nodes: Node[], x: number, y: number, width: number, height: number, depth = 0): QuadTreeNode => {
+        const MAX_DEPTH = 6;
+        const MAX_NODES = 4;
+        
+        const tree: QuadTreeNode = { x, y, width, height, nodes: [] };
+        
+        // 过滤在当前范围内的节点
+        const nodesInBounds = nodes.filter(n => 
+            n.x >= x && n.x < x + width && n.y >= y && n.y < y + height
+        );
+        
+        if (nodesInBounds.length <= MAX_NODES || depth >= MAX_DEPTH) {
+            tree.nodes = nodesInBounds;
+            return tree;
+        }
+        
+        // 递归分割为4个子树
+        const halfW = width / 2;
+        const halfH = height / 2;
+        tree.children = [
+            buildQuadTree(nodesInBounds, x, y, halfW, halfH, depth + 1),
+            buildQuadTree(nodesInBounds, x + halfW, y, halfW, halfH, depth + 1),
+            buildQuadTree(nodesInBounds, x, y + halfH, halfW, halfH, depth + 1),
+            buildQuadTree(nodesInBounds, x + halfW, y + halfH, halfW, halfH, depth + 1),
+        ];
+        
+        return tree;
+    };
+
+    // 四叉树范围查询（加速斥力计算）
+    const queryQuadTree = (tree: QuadTreeNode, x: number, y: number, radius: number): Node[] => {
+        const result: Node[] = [];
+        
+        // 检查范围是否相交
+        const intersects = !(
+            x + radius < tree.x ||
+            x - radius > tree.x + tree.width ||
+            y + radius < tree.y ||
+            y - radius > tree.y + tree.height
+        );
+        
+        if (!intersects) return result;
+        
+        if (tree.children) {
+            tree.children.forEach(child => {
+                result.push(...queryQuadTree(child, x, y, radius));
+            });
+        } else {
+            result.push(...tree.nodes);
+        }
+        
+        return result;
+    };
+
+    // 时间轴布局算法（按月份分组）
+    const applyTimelineLayout = (nodes: Node[]) => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // 按年月分组
+        const timeGroups = new Map<string, Node[]>();
+        nodes.forEach(n => {
+            if (n.type === 'paper' && n.data) {
+                let yearMonth = '';
+                
+                // 优先从文件名提取
+                if (n.data.fileUrl) {
+                    const filename = n.data.fileUrl.split('/').pop() || '';
+                    const dateInfo = extractDateFromFilename(filename);
+                    if (dateInfo) {
+                        yearMonth = dateInfo.yearMonth;
+                    }
+                }
+                
+                // 如果文件名没有，使用year字段
+                if (!yearMonth && n.data.year) {
+                    yearMonth = `${n.data.year}-00`; // 00表示未知月份
+                }
+                
+                if (yearMonth) {
+                    if (!timeGroups.has(yearMonth)) {
+                        timeGroups.set(yearMonth, []);
+                    }
+                    timeGroups.get(yearMonth)!.push(n);
+                }
+            }
+        });
+        
+        // 按时间排序
+        const sortedTimes = Array.from(timeGroups.keys()).sort();
+        const timeSpacing = Math.min(width / (sortedTimes.length + 1), 250);
+        
+        sortedTimes.forEach((yearMonth, idx) => {
+            const timeNodes = timeGroups.get(yearMonth)!;
+            const centerX = (idx + 1) * timeSpacing;
+            const stackHeight = timeNodes.length * 70;
+            const startY = (height - stackHeight) / 2;
+            
+            timeNodes.forEach((node, i) => {
+                node.x = centerX + (Math.random() - 0.5) * 80;
+                node.y = startY + i * 70;
+                node.vx = 0;
+                node.vy = 0;
+            });
+        });
+        
+        // 中心节点居中底部
+        const foolNode = nodes.find(n => n.type === 'fool');
+        if (foolNode) {
+            foolNode.x = width / 2;
+            foolNode.y = height - 100;
+        }
+    };
+
+    // 聚类布局算法
+    const applyClusterLayout = (nodes: Node[], mode: ClusterMode) => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        if (mode === 'none') return;
+        
+        // 分组逻辑
+        const groups = new Map<string, Node[]>();
+        
+        nodes.forEach(n => {
+            if (n.type === 'paper' && n.data) {
+                let groupKey = 'unknown';
+                
+                if (mode === 'year' && n.data.year) {
+                    groupKey = n.data.year;
+                } else if (mode === 'tag' && n.data.tags.length > 0) {
+                    groupKey = n.data.tags[0]; // 使用第一个标签
+                } else if (mode === 'folder' && n.data.folder_id) {
+                    groupKey = `folder-${n.data.folder_id}`;
+                }
+                
+                if (!groups.has(groupKey)) groups.set(groupKey, []);
+                groups.get(groupKey)!.push(n);
+            }
+        });
+        
+        // 圆形布局各个聚类
+        const groupKeys = Array.from(groups.keys());
+        const angleStep = (2 * Math.PI) / groupKeys.length;
+        const radius = Math.min(width, height) * 0.3;
+        
+        groupKeys.forEach((key, idx) => {
+            const angle = idx * angleStep;
+            const clusterCenterX = width / 2 + Math.cos(angle) * radius;
+            const clusterCenterY = height / 2 + Math.sin(angle) * radius;
+            
+            const clusterNodes = groups.get(key)!;
+            const clusterRadius = Math.sqrt(clusterNodes.length) * 30;
+            
+            clusterNodes.forEach((node, i) => {
+                const localAngle = (i / clusterNodes.length) * 2 * Math.PI;
+                node.x = clusterCenterX + Math.cos(localAngle) * clusterRadius;
+                node.y = clusterCenterY + Math.sin(localAngle) * clusterRadius;
+                node.vx = 0;
+                node.vy = 0;
+            });
+        });
+        
+        // 中心节点
+        const foolNode = nodes.find(n => n.type === 'fool');
+        if (foolNode) {
+            foolNode.x = width / 2;
+            foolNode.y = height / 2;
+        }
+    };
+
+    // 聚类模式下的颜色编码
+    const getClusterColor = (node: Node): string => {
+        if (clusterMode === 'none' || node.type === 'fool') return '#E60012';
+        if (!node.data) return '#666';
+        
+        const colors = [
+            '#E60012', // 红
+            '#00A8E8', // 蓝
+            '#00B159', // 绿
+            '#FFB612', // 黄
+            '#9B59B6', // 紫
+            '#E67E22', // 橙
+            '#1ABC9C', // 青
+            '#E91E63', // 粉
+        ];
+        
+        let key = '';
+        if (clusterMode === 'year' && node.data.year) {
+            key = node.data.year;
+        } else if (clusterMode === 'tag' && node.data.tags.length > 0) {
+            key = node.data.tags[0];
+        } else if (clusterMode === 'folder' && node.data.folder_id) {
+            key = `folder-${node.data.folder_id}`;
+        }
+        
+        // 简单哈希函数
+        const hash = key.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        return colors[hash % colors.length];
+    };
+
+    // 1. Initialize Nodes & Links (with filtering support)
     const { nodes, links } = useMemo(() => {
         const width = window.innerWidth;
         const height = window.innerHeight;
+        
+        // 过滤论文
+        let filteredPapers = papers;
+        
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            filteredPapers = filteredPapers.filter(p => 
+                p.title.toLowerCase().includes(query) ||
+                p.author.toLowerCase().includes(query) ||
+                p.tags.some(t => t.toLowerCase().includes(query))
+            );
+        }
+        
+        if (selectedYear) {
+            filteredPapers = filteredPapers.filter(p => p.year === selectedYear);
+        }
+        
+        if (selectedTag) {
+            filteredPapers = filteredPapers.filter(p => p.tags.includes(selectedTag));
+        }
         
         // A. Create Nodes
         const initialNodes: Node[] = [];
@@ -186,7 +482,7 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
         });
 
         // Paper Nodes
-        papers.forEach((p, idx) => {
+        filteredPapers.forEach((p, idx) => {
             // Assign Arcana based on index (skipping 0-Fool)
             const arcanaIdx = (idx % (MAJOR_ARCANA.length - 1)) + 1;
             initialNodes.push({
@@ -205,15 +501,15 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
         const initialLinks: Link[] = [];
         
         // Link all to Fool (Weak connection)
-        papers.forEach(p => {
+        filteredPapers.forEach(p => {
             initialLinks.push({ source: 'root-fool', target: `paper-${p.id}`, strength: 0.05 });
         });
 
         // Link Papers based on Shared Tags (Strong connection)
-        for (let i = 0; i < papers.length; i++) {
-            for (let j = i + 1; j < papers.length; j++) {
-                const p1 = papers[i];
-                const p2 = papers[j];
+        for (let i = 0; i < filteredPapers.length; i++) {
+            for (let j = i + 1; j < filteredPapers.length; j++) {
+                const p1 = filteredPapers[i];
+                const p2 = filteredPapers[j];
                 const sharedTags = p1.tags.filter(t => p2.tags.includes(t));
                 
                 if (sharedTags.length > 0) {
@@ -227,15 +523,23 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
         }
 
         return { nodes: initialNodes, links: initialLinks };
-    }, [papers]);
+    }, [papers, searchQuery, selectedYear, selectedTag]);
 
     // Mutable state for physics simulation
     const simulationNodes = useRef(nodes);
     const [, setRenderTrigger] = useState(0);
 
-    // 2. Physics Engine (Custom RAF Loop)
+    // 2. Physics Engine (Custom RAF Loop with QuadTree optimization)
     useEffect(() => {
         simulationNodes.current = nodes; // Update ref if props change
+        
+        // 应用初始布局
+        if (viewMode === 'timeline') {
+            applyTimelineLayout(simulationNodes.current);
+        } else if (clusterMode !== 'none') {
+            applyClusterLayout(simulationNodes.current, clusterMode);
+        }
+        
         let animationFrameId: number;
 
         const tick = () => {
@@ -248,12 +552,22 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
             const DAMPING = 0.92;
             const MAX_SPEED = 12;
             const BASE_SPRING_K = 0.005;
+            const INTERACTION_RADIUS = 800;
             
             const currentNodes = simulationNodes.current;
             const now = Date.now() / 1000;
 
-            // Reset Forces (using temp variables or just applying to velocity directly?)
-            // We'll use a `forces` map to accumulate first.
+            // 跳过物理模拟如果是时间轴或聚类模式
+            if (viewMode === 'timeline' || clusterMode !== 'none') {
+                setRenderTrigger(prev => prev + 1);
+                animationFrameId = requestAnimationFrame(tick);
+                return;
+            }
+
+            // 构建四叉树（性能优化）
+            const quadTree = buildQuadTree(currentNodes, 0, 0, width, height);
+
+            // Reset Forces
             const forces = new Map<string, {x: number, y: number}>();
             currentNodes.forEach(n => forces.set(n.id, {x: 0, y: 0}));
 
@@ -262,25 +576,27 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                 if (f) { f.x += x; f.y += y; }
             };
 
-            // 1. REPULSION (N^2)
-            for (let i = 0; i < currentNodes.length; i++) {
-                for (let j = i + 1; j < currentNodes.length; j++) {
-                    const n1 = currentNodes[i];
-                    const n2 = currentNodes[j];
+            // 1. REPULSION (使用四叉树加速)
+            currentNodes.forEach(n1 => {
+                // 使用四叉树查询附近节点
+                const nearbyNodes = queryQuadTree(quadTree, n1.x, n1.y, INTERACTION_RADIUS);
+                
+                nearbyNodes.forEach(n2 => {
+                    if (n1.id === n2.id) return;
+                    
                     const dx = n1.x - n2.x;
                     const dy = n1.y - n2.y;
                     const distSq = dx*dx + dy*dy;
                     const dist = Math.sqrt(distSq) || 1;
                     
-                    if (dist < 800) { // Interaction radius
+                    if (dist < INTERACTION_RADIUS) {
                         const force = REPULSION / (distSq + 100);
                         const fx = (dx / dist) * force;
                         const fy = (dy / dist) * force;
                         addForce(n1.id, fx, fy);
-                        addForce(n2.id, -fx, -fy);
                     }
-                }
-            }
+                });
+            });
 
             // 2. SPRINGS (Links)
             links.forEach(link => {
@@ -292,7 +608,6 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                     const dist = Math.sqrt(dx*dx + dy*dy) || 1;
                     
                     // Hooke's Law: F = k * (current_dist - rest_length)
-                    // Stronger link = Closer (shorter rest length) + Stiffer
                     const restLength = 100 + (1 - link.strength) * 200; 
                     const k = BASE_SPRING_K * (1 + link.strength * 2);
                     
@@ -322,7 +637,6 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                 f.y += (height/2 - node.y) * CENTER_GRAVITY;
 
                 // Levitation (Sine Wave)
-                // Use consistent random seed based on ID length + char code
                 const seed = node.id.length + (node.id.charCodeAt(node.id.length-1) || 0);
                 f.y += Math.sin(now * 2 + seed) * 0.08;
 
@@ -356,7 +670,12 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
 
         tick();
         return () => cancelAnimationFrame(animationFrameId);
-    }, [nodes, links]);
+    }, [nodes, links, viewMode, clusterMode]);
+
+    // 如果显示3D模式，渲染3D组件
+    if (show3D) {
+        return <MindPalace3D papers={papers} onClose={() => setShow3D(false)} onRead={onRead} playSfx={playSfx} />;
+    }
 
     return (
             <motion.div 
@@ -387,6 +706,163 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                 <p className="text-white/60 font-mono mt-2 ml-4">
                     // COGNITIVE NETWORK VISUALIZATION
                 </p>
+            </div>
+
+            {/* --- CONTROL PANEL --- */}
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex gap-2 pointer-events-auto">
+                {/* 视图模式切换 */}
+                <div className="bg-black/80 border-2 border-phantom-red p-2 flex gap-1">
+                    <button
+                        onClick={() => setViewMode('force')}
+                        className={`px-4 py-2 font-p5 text-sm transition-colors ${
+                            viewMode === 'force' 
+                                ? 'bg-phantom-red text-white' 
+                                : 'text-white/60 hover:text-white'
+                        }`}
+                        title="Force-Directed Layout"
+                    >
+                        <Grid3x3 size={18} className="inline mr-1" />
+                        FORCE
+                    </button>
+                    <button
+                        onClick={() => { setViewMode('timeline'); setClusterMode('none'); }}
+                        className={`px-4 py-2 font-p5 text-sm transition-colors ${
+                            viewMode === 'timeline' 
+                                ? 'bg-phantom-red text-white' 
+                                : 'text-white/60 hover:text-white'
+                        }`}
+                        title="Timeline View"
+                    >
+                        <Calendar size={18} className="inline mr-1" />
+                        TIMELINE
+                    </button>
+                    <button
+                        onClick={() => setShow3D(true)}
+                        className="px-4 py-2 font-p5 text-sm text-white/60 hover:text-white transition-colors"
+                        title="3D Sphere View"
+                    >
+                        <Box size={18} className="inline mr-1" />
+                        3D VIEW
+                    </button>
+                </div>
+
+                {/* 聚类模式 */}
+                {viewMode === 'force' && (
+                    <div className="bg-black/80 border-2 border-phantom-blue p-2 flex gap-1">
+                        <button
+                            onClick={() => setClusterMode('none')}
+                            className={`px-3 py-2 font-p5 text-sm transition-colors ${
+                                clusterMode === 'none' 
+                                    ? 'bg-phantom-blue text-white' 
+                                    : 'text-white/60 hover:text-white'
+                            }`}
+                        >
+                            NONE
+                        </button>
+                        <button
+                            onClick={() => setClusterMode('year')}
+                            className={`px-3 py-2 font-p5 text-sm transition-colors ${
+                                clusterMode === 'year' 
+                                    ? 'bg-phantom-blue text-white' 
+                                    : 'text-white/60 hover:text-white'
+                            }`}
+                        >
+                            YEAR
+                        </button>
+                        <button
+                            onClick={() => setClusterMode('tag')}
+                            className={`px-3 py-2 font-p5 text-sm transition-colors ${
+                                clusterMode === 'tag' 
+                                    ? 'bg-phantom-blue text-white' 
+                                    : 'text-white/60 hover:text-white'
+                            }`}
+                        >
+                            TAG
+                        </button>
+                    </div>
+                )}
+
+                {/* 搜索框 */}
+                <input
+                    type="text"
+                    placeholder="SEARCH..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-black/80 border-2 border-white/50 px-4 py-2 text-white font-mono text-sm focus:border-phantom-red outline-none w-64"
+                />
+            </div>
+
+            {/* --- FILTER PANEL (Right Side) --- */}
+            <div className="absolute top-24 right-8 z-50 pointer-events-auto max-h-[60vh] overflow-y-auto">
+                {/* Year Filter */}
+                {years.length > 0 && (
+                    <div className="bg-black/80 border-2 border-phantom-red p-3 mb-2">
+                        <div className="text-phantom-red font-p5 text-sm mb-2 flex items-center gap-2">
+                            <Calendar size={16} />
+                            YEAR FILTER
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                            <button
+                                onClick={() => setSelectedYear(null)}
+                                className={`px-2 py-1 text-xs font-bold transition-colors ${
+                                    selectedYear === null 
+                                        ? 'bg-phantom-red text-white' 
+                                        : 'bg-white/20 text-white hover:bg-white/40'
+                                }`}
+                            >
+                                ALL
+                            </button>
+                            {years.map(year => (
+                                <button
+                                    key={year}
+                                    onClick={() => setSelectedYear(year === selectedYear ? null : year)}
+                                    className={`px-2 py-1 text-xs font-bold transition-colors ${
+                                        selectedYear === year 
+                                            ? 'bg-phantom-red text-white' 
+                                            : 'bg-white/20 text-white hover:bg-white/40'
+                                    }`}
+                                >
+                                    {year}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Tag Filter */}
+                {allTags.length > 0 && (
+                    <div className="bg-black/80 border-2 border-phantom-blue p-3">
+                        <div className="text-phantom-blue font-p5 text-sm mb-2 flex items-center gap-2">
+                            <Filter size={16} />
+                            TAG FILTER
+                        </div>
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                            <button
+                                onClick={() => setSelectedTag(null)}
+                                className={`px-2 py-1 text-xs font-bold transition-colors ${
+                                    selectedTag === null 
+                                        ? 'bg-phantom-blue text-white' 
+                                        : 'bg-white/20 text-white hover:bg-white/40'
+                                }`}
+                            >
+                                ALL
+                            </button>
+                            {allTags.slice(0, 20).map(tag => (
+                                <button
+                                    key={tag}
+                                    onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                                    className={`px-2 py-1 text-xs font-bold transition-colors ${
+                                        selectedTag === tag 
+                                            ? 'bg-phantom-blue text-white' 
+                                            : 'bg-white/20 text-white hover:bg-white/40'
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <button 
@@ -421,6 +897,90 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                         />
                     );
                 })}
+
+                {/* Timeline Year Labels */}
+                {viewMode === 'timeline' && (() => {
+                    const timeGroups = new Map<string, Node[]>();
+                    
+                    // 收集时间分组
+                    simulationNodes.current.forEach(n => {
+                        if (n.type === 'paper' && n.data) {
+                            let yearMonth = '';
+                            
+                            // 从文件名提取
+                            if (n.data.fileUrl) {
+                                const filename = n.data.fileUrl.split('/').pop() || '';
+                                const dateInfo = extractDateFromFilename(filename);
+                                if (dateInfo) {
+                                    yearMonth = dateInfo.yearMonth;
+                                }
+                            }
+                            
+                            // 备用：使用year字段
+                            if (!yearMonth && n.data.year) {
+                                yearMonth = `${n.data.year}-00`;
+                            }
+                            
+                            if (yearMonth) {
+                                if (!timeGroups.has(yearMonth)) {
+                                    timeGroups.set(yearMonth, []);
+                                }
+                                timeGroups.get(yearMonth)!.push(n);
+                            }
+                        }
+                    });
+                    
+                    return Array.from(timeGroups.keys()).sort().map(yearMonth => {
+                        const timeNodes = timeGroups.get(yearMonth)!;
+                        const avgX = timeNodes.reduce((sum, n) => sum + n.x, 0) / timeNodes.length;
+                        
+                        // 格式化显示文本
+                        const displayText = yearMonth.endsWith('-00') 
+                            ? yearMonth.replace('-00', '') 
+                            : formatMonth(yearMonth);
+                        
+                        return (
+                            <g key={yearMonth}>
+                                {/* 月份标签 */}
+                                <text
+                                    x={avgX}
+                                    y={60}
+                                    textAnchor="middle"
+                                    fill="#E60012"
+                                    fontSize="28"
+                                    fontWeight="bold"
+                                    fontFamily="'P5', sans-serif"
+                                >
+                                    {displayText}
+                                </text>
+                                
+                                {/* 论文数量 */}
+                                <text
+                                    x={avgX}
+                                    y={85}
+                                    textAnchor="middle"
+                                    fill="#fff"
+                                    fontSize="12"
+                                    opacity="0.6"
+                                >
+                                    {timeNodes.length} papers
+                                </text>
+                                
+                                {/* 垂直分隔线 */}
+                                <line
+                                    x1={avgX}
+                                    y1={100}
+                                    x2={avgX}
+                                    y2={window.innerHeight - 100}
+                                    stroke="#E60012"
+                                    strokeWidth="2"
+                                    strokeOpacity="0.3"
+                                    strokeDasharray="10,10"
+                                />
+                            </g>
+                        );
+                    });
+                })()}
             </svg>
 
             {/* --- NODES LAYER --- */}
@@ -459,13 +1019,24 @@ function MindPalace({ papers, onClose, onRead, playSfx }: MindPalaceProps) {
                         </div>
 
                         {/* TAROT CARD VISUAL */}
-                        <div className={`relative w-32 h-52 bg-black border-2 rounded-lg overflow-hidden transition-all duration-300 ${
-                            node.type === 'fool' 
-                                ? 'border-phantom-blue shadow-[0_0_20px_#00f]' 
-                                : selectedNode?.id === node.id 
-                                    ? 'border-phantom-red shadow-[0_0_30px_#f00] scale-110' 
-                                    : 'border-white/50 group-hover:border-phantom-red group-hover:shadow-[0_0_15px_#E60012]'
-                        }`}>
+                        <div className={`relative w-32 h-52 bg-black border-2 rounded-lg overflow-hidden transition-all duration-300`}
+                             style={{
+                                 borderColor: node.type === 'fool' 
+                                     ? '#00f' 
+                                     : selectedNode?.id === node.id 
+                                         ? getClusterColor(node)
+                                         : clusterMode !== 'none'
+                                             ? getClusterColor(node)
+                                             : 'rgba(255,255,255,0.5)',
+                                 boxShadow: node.type === 'fool'
+                                     ? '0 0 20px #00f'
+                                     : selectedNode?.id === node.id
+                                         ? `0 0 30px ${getClusterColor(node)}`
+                                         : clusterMode !== 'none'
+                                             ? `0 0 10px ${getClusterColor(node)}`
+                                             : 'none'
+                             }}
+                        >
                             {/* Rider-Waite Tarot Image (with P5 SVG fallback) */}
                             {node.arcana ? (
                                 TAROT_IMAGES[node.arcana.number] ? (

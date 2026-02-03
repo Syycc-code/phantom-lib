@@ -63,10 +63,16 @@ echo [*] Checking for updates...
 echo.
 
 :: --- 4. LAUNCH ---
+echo [*] Cleaning up old processes...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8002" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+echo [OK] Ready to start.
+echo.
 echo [*] Starting Services...
 
 :: Start Backend
-start "Phantom Backend" cmd /k "cd backend && title BACKEND && echo [PHANTOM] Server Starting... && %PYTHON_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+start "Phantom Backend" cmd /k "cd backend && title BACKEND && echo [PHANTOM] Server Starting on port 8002... && %PYTHON_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8002"
 
 :: Start Frontend
 start "Phantom Frontend" cmd /k "title FRONTEND && npm run dev"

@@ -98,8 +98,8 @@ def get_rag_components():
             
             try:
                 print(f"[PHANTOM] Loading Embedding Model: {model_name}...")
-                # Add timeout options if possible, otherwise rely on mirror
-                _embedder = SentenceTransformer(model_name, device='cpu', trust_remote_code=True)
+                # Remove trust_remote_code parameter - not supported in newer versions
+                _embedder = SentenceTransformer(model_name, device='cpu')
             except Exception as dl_error:
                 print(f"[PHANTOM] Download Timeout/Error with Mirror: {dl_error}.")
                 print("[PHANTOM] Attempting fallback to local/smaller model...")
@@ -108,9 +108,13 @@ def get_rag_components():
                     # Fallback 1: Try smaller model
                     _embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
                 except:
-                     # Fallback 2: Try completely offline mode if model exists in cache
-                     print("[PHANTOM] Network failed. Checking local cache only...")
-                     _embedder = SentenceTransformer(model_name, device='cpu', local_files_only=True)
+                 # Fallback 2: Try completely offline mode if model exists in cache
+                 print("[PHANTOM] Network failed. Checking local cache only...")
+                 try:
+                     _embedder = SentenceTransformer(model_name, device='cpu')
+                 except:
+                     # Final fallback: use any available model
+                     _embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
 
             print("[PHANTOM] Embedding Model Loaded.")
         except Exception as e:
@@ -155,33 +159,65 @@ def index_document(chunks_data: list, filename: str):
     ids = [f"{filename}_{uuid.uuid4()}" for _ in valid_chunks]
     
     # Batch processing to avoid hitting limits
-    BATCH_SIZE = 10
+    # REDUCED: 10 -> 3 to prevent memory overflow and crashes
+    BATCH_SIZE = 3
     total_chunks = len(texts)
     
     print(f"[MEMORY] Indexing {total_chunks} chunks from {filename} with spatial data...")
+    print(f"[MEMORY] Using batch size: {BATCH_SIZE} (safer for stability)")
+    
+    successful_batches = 0
+    failed_batches = 0
     
     for i in range(0, total_chunks, BATCH_SIZE):
-        print(f"  [RAG DEBUG] Batch {i} to {i+BATCH_SIZE} start...", flush=True)
+        batch_num = (i // BATCH_SIZE) + 1
+        total_batches = (total_chunks + BATCH_SIZE - 1) // BATCH_SIZE
+        print(f"  [RAG] Batch {batch_num}/{total_batches} (chunks {i}-{min(i+BATCH_SIZE, total_chunks)})...", flush=True)
+        
         batch_texts = texts[i:i+BATCH_SIZE]
         batch_metas = metadatas[i:i+BATCH_SIZE]
         batch_ids = ids[i:i+BATCH_SIZE]
         
         try:
-            print("  [RAG DEBUG] Encoding...", flush=True)
-            embeddings = embedder.encode(batch_texts).tolist()
-            print("  [RAG DEBUG] Adding to Chroma...", flush=True)
-            collection.add(
-                documents=batch_texts,
-                embeddings=embeddings,
-                metadatas=batch_metas,
-                ids=batch_ids
-            )
-            print("  [RAG DEBUG] Batch done.", flush=True)
+            # Encode with timeout protection
+            embeddings = embedder.encode(batch_texts, show_progress_bar=False).tolist()
+            
+            # Add to ChromaDB with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    collection.add(
+                        documents=batch_texts,
+                        embeddings=embeddings,
+                        metadatas=batch_metas,
+                        ids=batch_ids
+                    )
+                    successful_batches += 1
+                    print(f"  [RAG] ✓ Batch {batch_num} indexed successfully.", flush=True)
+                    break
+                except Exception as db_err:
+                    if attempt < max_retries - 1:
+                        print(f"  [RAG] Retry {attempt+1}/{max_retries} due to: {db_err}", flush=True)
+                        import time
+                        time.sleep(0.5)  # Brief delay before retry
+                    else:
+                        raise db_err
+            
+            # Brief pause between batches to reduce memory pressure
+            import time
+            time.sleep(0.1)
+            
         except Exception as e:
-            print(f"  [RAG DEBUG] Batch Failed: {e}", flush=True)
-            raise e
+            failed_batches += 1
+            print(f"  [RAG] ✗ Batch {batch_num} FAILED: {e}", flush=True)
+            # Don't crash - continue with remaining batches
+            continue
     
     print(f"[MEMORY] Indexing Complete: {filename}")
+    print(f"[MEMORY] Summary: {successful_batches} successful, {failed_batches} failed")
+    
+    if failed_batches > 0:
+        print(f"[WARNING] Some batches failed. RAG may have incomplete data for this file.")
 
 def retrieve_context(query: str, n_results=5, file_filter: list[str] = None): # Added file_filter
     client, collection, embedder = get_rag_components()

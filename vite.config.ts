@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',  // 使用localhost而非127.0.0.1以兼容VPN
+        target: 'http://localhost:8002',  // 后端运行在8002端口
         changeOrigin: true,
         secure: false,                     // 允许不安全连接
         ws: true,                          // 支持WebSocket

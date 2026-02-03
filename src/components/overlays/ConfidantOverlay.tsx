@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Paperclip, Search, Plus, ChevronLeft, ChevronRight, Video, Mic2, Map, Presentation, BarChart3, Lightbulb, Sparkles, Clock, Copy, Download, Loader, Cpu, FileText, MoreVertical, RefreshCw, Trash2 } from 'lucide-react';
+import { X, Send, Paperclip, Search, Plus, ChevronLeft, ChevronRight, Video, Mic2, Map, Presentation, BarChart3, Lightbulb, Sparkles, Clock, Copy, Download, Loader, Cpu, FileText, MoreVertical, RefreshCw, Trash2, Minimize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import CitationPreview from '../shared/CitationPreview';
+import MermaidDiagram from '../shared/MermaidDiagram';
 
 interface Citation {
     index: number;
@@ -61,6 +63,11 @@ export default function ConfidantOverlay({ initialMessages, onClose, playSfx, sc
     const [isDragging, setIsDragging] = useState(false);
     const dropZoneRef = useRef<HTMLDivElement>(null);
     
+    // Citation interaction states
+    const [hoveredCitation, setHoveredCitation] = useState<{ citation: Citation; x: number; y: number } | null>(null);
+    const [splitViewPdf, setSplitViewPdf] = useState<{ paperId: number; page: number; title: string } | null>(null);
+    const hoverTimerRef = useRef<number | null>(null);
+    
     // Load sources from backend
     useEffect(() => {
         const fetchSources = async () => {
@@ -109,7 +116,7 @@ export default function ConfidantOverlay({ initialMessages, onClose, playSfx, sc
     ]);
 
     const handleJumpToCitation = (citation: Citation) => {
-        // Dispatch Custom Event for ReaderOverlay (if it's open)
+        // Double-click or "View Full" button: Close overlay and jump to PDF
         const event = new CustomEvent('PHANTOM_JUMP_TO_PDF', { 
             detail: { 
                 page: citation.page, 
@@ -119,6 +126,64 @@ export default function ConfidantOverlay({ initialMessages, onClose, playSfx, sc
         });
         window.dispatchEvent(event);
         playSfx('confirm');
+    };
+    
+    // Handle citation hover (show preview after delay)
+    const handleCitationHover = (citation: Citation, e: React.MouseEvent) => {
+        // Clear any existing timer
+        if (hoverTimerRef.current) {
+            clearTimeout(hoverTimerRef.current);
+        }
+        
+        // Set a delay before showing preview (400ms)
+        hoverTimerRef.current = window.setTimeout(() => {
+            setHoveredCitation({
+                citation,
+                x: e.clientX,
+                y: e.clientY
+            });
+        }, 400);
+    };
+    
+    const handleCitationLeave = () => {
+        // Clear timer
+        if (hoverTimerRef.current) {
+            clearTimeout(hoverTimerRef.current);
+            hoverTimerRef.current = null;
+        }
+        // Don't immediately hide - let user move to preview
+        setTimeout(() => {
+            setHoveredCitation(null);
+        }, 200);
+    };
+    
+    // Handle citation click (open split view)
+    const handleCitationClick = async (citation: Citation) => {
+        playSfx('click');
+        
+        // Try to get paper ID from source
+        // Fetch paper info from backend
+        try {
+            const res = await fetch('/api/papers');
+            if (res.ok) {
+                const papers = await res.json();
+                const matchedPaper = papers.find((p: any) => p.title === citation.source);
+                
+                if (matchedPaper) {
+                    setSplitViewPdf({
+                        paperId: matchedPaper.id,
+                        page: citation.page,
+                        title: citation.source
+                    });
+                } else {
+                    // Fallback: just jump to PDF
+                    handleJumpToCitation(citation);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch paper info:', e);
+            handleJumpToCitation(citation);
+        }
     };
     
     // Generate content using Studio tools
@@ -138,50 +203,322 @@ export default function ConfidantOverlay({ initialMessages, onClose, playSfx, sc
         switch (toolType) {
             case 'mindmap':
                 title = 'Mind Map';
-                prompt = `Based on the following conversation, generate a detailed mind map in Markdown format using nested bullet points.
+                prompt = `Based on the following academic discussion, generate a mind map in Mermaid diagram format.
 
 Conversation:
 ${conversationContext}
 
-Create a comprehensive mind map with:
-- Main topic at the root
-- 3-5 major branches
-- Sub-branches with detailed points
-- Use clear hierarchy with bullet points (-, *)
+Output a Mermaid mindmap diagram using this syntax:
+\`\`\`mermaid
+mindmap
+  root((Central Topic))
+    Branch 1
+      Sub-topic 1.1
+      Sub-topic 1.2
+    Branch 2
+      Sub-topic 2.1
+      Sub-topic 2.2
+\`\`\`
 
-Output only the mind map structure in Markdown format.`;
+Create a comprehensive academic mind map with:
+- Central research question/topic at root
+- 3-5 major conceptual branches
+- Sub-branches with detailed points, methods, findings
+- Clear hierarchical structure
+
+Output ONLY the mermaid code block, nothing else.`;
                 break;
                 
             case 'report':
                 title = 'Research Report';
-                prompt = `Based on the following conversation, generate a comprehensive research report in Markdown format.
+                prompt = `Based on the following academic discussion, generate a comprehensive research report in Markdown format.
 
 Conversation:
 ${conversationContext}
 
-Include these sections:
+Structure the report with these sections:
 # Executive Summary
-# Background & Context
-# Key Findings
-# Methodology
-# Conclusions
-# References
+Brief overview (150-200 words) of key findings and implications.
 
-Make it professional and well-structured with proper headings, bullet points, and formatting.`;
+# Background & Literature Context
+Relevant prior work, theoretical framework, and research gaps.
+
+# Research Question / Hypothesis
+Clear statement of what was investigated.
+
+# Methodology
+Approaches, techniques, datasets, or analytical methods discussed.
+
+# Key Findings
+Main results, patterns, or insights discovered.
+
+# Discussion & Analysis
+Interpretation of findings, limitations, and connections to broader context.
+
+# Conclusions & Future Directions
+Summary and suggested next steps for research.
+
+# References
+Cited works mentioned in the conversation (if any).
+
+Make it professional, well-structured, and suitable for academic contexts.`;
                 break;
                 
             case 'flashcards':
-                title = 'Flashcards';
-                prompt = `Based on the following conversation, generate study flashcards in Markdown format.
+                title = 'Study Flashcards';
+                prompt = `Based on the following academic discussion, generate study flashcards in Markdown format.
 
 Conversation:
 ${conversationContext}
 
-Create 8-10 flashcards with:
-**Q:** [Question]
-**A:** [Answer]
+Create 10-15 flashcards covering key concepts with this format:
+---
+**Q:** [Question - Test conceptual understanding]
+**A:** [Detailed answer with context]
 
-Focus on key concepts, definitions, and important details.`;
+Focus on:
+- Core concepts and definitions
+- Methodological insights
+- Key findings and their implications
+- Critical distinctions between similar ideas
+- "Why" and "How" questions, not just facts
+
+Example:
+**Q:** Why is teacher forcing used in sequence-to-sequence models?
+**A:** Teacher forcing uses ground-truth tokens as inputs during training (instead of model predictions) to stabilize learning and reduce variance. It helps the model learn faster but can cause exposure bias at test time.
+
+---
+
+Generate flashcards now:`;
+                break;
+                
+            case 'poster':
+                title = 'Academic Poster';
+                prompt = `Based on the following research discussion, generate content for an academic conference poster in Markdown format.
+
+Conversation:
+${conversationContext}
+
+Create poster content with these sections:
+
+# [TITLE - Concise and Descriptive]
+**Authors:** [Based on context if mentioned]
+**Affiliation:** [If mentioned]
+
+## Abstract
+2-3 sentences summarizing the core contribution.
+
+## Introduction
+- Motivation and research gap
+- Research question
+
+## Methods
+- Key approach/techniques
+- Datasets or tools
+
+## Results
+- Main findings (use bullet points)
+- Key metrics or outcomes
+
+## Conclusions
+- Takeaways
+- Impact and future work
+
+## Key References
+[Mentioned works]
+
+**Note:** Design visually with large fonts, minimal text, and clear structure. Use bullet points and visual hierarchy.`;
+                break;
+                
+            case 'infomap':
+                title = 'Information Flow Map';
+                prompt = `Based on the following discussion, generate an information flow diagram in Mermaid format.
+
+Conversation:
+${conversationContext}
+
+Output a Mermaid flowchart showing:
+- Key concepts/components as nodes
+- Relationships and information flow as arrows
+- Process steps or dependencies
+
+Use this syntax:
+\`\`\`mermaid
+graph TD
+    A[Concept A] --> B[Concept B]
+    B --> C{Decision Point}
+    C -->|Yes| D[Outcome 1]
+    C -->|No| E[Outcome 2]
+    D --> F[Final Result]
+    E --> F
+\`\`\`
+
+Styles:
+- Use [] for processes/concepts
+- Use {} for decision points
+- Use () for inputs/outputs
+- Use --> for flow direction
+- Label arrows with relationships
+
+Create a clear, hierarchical flow diagram representing the discussion structure.
+
+Output ONLY the mermaid code block.`;
+                break;
+                
+            case 'presentation':
+                title = 'Presentation Outline';
+                prompt = `Based on the following discussion, generate a presentation outline in Markdown format suitable for academic talks.
+
+Conversation:
+${conversationContext}
+
+Create a slide-by-slide outline:
+
+---
+## Slide 1: Title Slide
+**Title:** [Concise and impactful]
+**Subtitle:** [Context]
+**Presenter:** [If known]
+
+---
+## Slide 2: Motivation
+- Why does this matter?
+- What problem are we solving?
+- **Visual:** [Suggested diagram/image]
+
+---
+## Slide 3: Background
+- Key concepts the audience needs
+- Prior work landscape
+- **Visual:** [Timeline or comparison table]
+
+---
+## Slide 4-6: Core Content
+[Break down main ideas into 3-4 slides with:]
+- **Key Point:**
+- **Explanation:**
+- **Visual:**
+- **Talking points:**
+
+---
+## Slide 7: Results/Findings
+- Main outcomes
+- Evidence/data
+- **Visual:** [Chart/graph suggestion]
+
+---
+## Slide 8: Conclusions
+- Takeaways (3-5 bullets)
+- Impact and implications
+- Future directions
+
+---
+## Slide 9: Q&A
+- Anticipated questions
+- References
+
+**Presentation Tips:**
+- Aim for 10-12 slides (10-15 min talk)
+- Use visuals over text
+- One key idea per slide
+- Practice transitions`;
+                break;
+                
+            case 'audio':
+                title = 'Audio Script';
+                prompt = `Based on the following discussion, generate a podcast/audio presentation script.
+
+Conversation:
+${conversationContext}
+
+Create an engaging audio script with:
+
+**[INTRO - 30 seconds]**
+Hook listener with a compelling question or statement.
+Introduce the topic and why it matters.
+
+**[SEGMENT 1: Context - 2 min]**
+Provide background and set the stage.
+Use conversational language and analogies.
+
+**[SEGMENT 2: Deep Dive - 3-4 min]**
+Explore key concepts in detail.
+Break down complex ideas simply.
+Use examples and thought experiments.
+
+**[SEGMENT 3: Implications - 2 min]**
+Discuss impact and real-world applications.
+Connect to broader themes.
+
+**[CONCLUSION - 1 min]**
+Recap main insights.
+Leave listener with a thought-provoking takeaway.
+
+**NARRATION NOTES:**
+- [Pause here for emphasis]
+- [Explain with example]
+- [Change tone to emphasize]
+
+Total duration: ~8-10 minutes
+Tone: Professional but accessible, like NPR or Radiolab.`;
+                break;
+                
+            case 'video':
+                title = 'Video Script';
+                prompt = `Based on the following discussion, generate a video script with visual descriptions.
+
+Conversation:
+${conversationContext}
+
+Create a video script format:
+
+---
+**VIDEO TITLE:** [Catchy and descriptive]
+**Duration:** 5-8 minutes
+**Style:** Educational/Explainer
+
+---
+
+**[SCENE 1: HOOK - 0:00-0:30]**
+**VISUAL:** [Opening shot/animation]
+**NARRATION:** 
+[Compelling opening question or statement]
+
+**ON-SCREEN TEXT:** [Key phrase]
+
+---
+
+**[SCENE 2: INTRODUCTION - 0:30-1:30]**
+**VISUAL:** [Presenter on screen / animated diagrams]
+**NARRATION:**
+[Introduce topic, provide context]
+
+**GRAPHICS:** [Bullet points or visual elements]
+
+---
+
+**[SCENE 3-5: MAIN CONTENT - 1:30-6:00]**
+Break into 3 segments, each containing:
+
+**VISUAL:** [Animations, diagrams, screen recordings]
+**NARRATION:** [Explain key concepts]
+**CALLOUTS:** [Highlight important terms]
+**TRANSITIONS:** [Suggested scene changes]
+
+---
+
+**[SCENE 6: SUMMARY - 6:00-7:00]**
+**VISUAL:** [Recap montage]
+**NARRATION:** [Key takeaways]
+
+---
+
+**[SCENE 7: CTA - 7:00-7:30]**
+**VISUAL:** [End screen]
+**NARRATION:** [Call to action, subscribe, etc.]
+
+**MUSIC:** [Suggested background music style]
+**PACE:** Moderate, allow time for visual absorption.`;
                 break;
                 
             default:
@@ -272,10 +609,14 @@ Focus on key concepts, definitions, and important details.`;
     const handleFileUpload = async (files: FileList) => {
         playSfx('confirm');
         
+        console.log(`[UPLOAD] Starting batch upload: ${files.length} files`);
+        
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
+            console.log(`[UPLOAD] Processing file ${i+1}/${files.length}: ${file.name}`);
+            
             if (file.type !== 'application/pdf') {
-                console.warn('Only PDF files are supported');
+                console.warn(`[UPLOAD] Skipping non-PDF file: ${file.name}`);
                 continue;
             }
             
@@ -283,6 +624,7 @@ Focus on key concepts, definitions, and important details.`;
                 const formData = new FormData();
                 formData.append('file', file);
                 
+                console.log(`[UPLOAD] Uploading ${file.name}...`);
                 const res = await fetch('/api/upload', { 
                     method: 'POST', 
                     body: formData 
@@ -290,6 +632,7 @@ Focus on key concepts, definitions, and important details.`;
                 
                 if (res.ok) {
                     const p = await res.json();
+                    console.log(`[UPLOAD] ✓ ${file.name} uploaded successfully (ID: ${p.id})`);
                     const newSource: Source = {
                         id: p.id,
                         title: p.title,
@@ -298,12 +641,17 @@ Focus on key concepts, definitions, and important details.`;
                     };
                     setSources(prev => [newSource, ...prev]);
                     playSfx('rankup');
+                } else {
+                    const error = await res.text();
+                    console.error(`[UPLOAD] ✗ ${file.name} failed: ${error}`);
                 }
             } catch (e) {
-                console.error('Upload failed:', e);
+                console.error(`[UPLOAD] ✗ ${file.name} exception:`, e);
                 playSfx('cancel');
             }
         }
+        
+        console.log(`[UPLOAD] Batch upload complete`);
     };
     
     // Drag and drop handlers
@@ -922,8 +1270,17 @@ Focus on key concepts, definitions, and important details.`;
                                                                 <span 
                                                                     key={i}
                                                                     className="inline-block mx-1 px-2 py-0.5 text-xs font-bold cursor-pointer bg-phantom-red/80 text-white border border-gray-700 hover:bg-phantom-red hover:scale-110 transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.3)]"
-                                                                    onClick={() => handleJumpToCitation(citation)}
-                                                                    title={`${citation.source} (p.${citation.page})`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleCitationClick(citation);
+                                                                    }}
+                                                                    onDoubleClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleJumpToCitation(citation);
+                                                                    }}
+                                                                    onMouseEnter={(e) => handleCitationHover(citation, e)}
+                                                                    onMouseLeave={handleCitationLeave}
+                                                                    title={`Click: Split View | Double-click: Full Page`}
                                                                 >
                                                                     {part}
                                                                 </span>
@@ -1281,42 +1638,185 @@ Focus on key concepts, definitions, and important details.`;
                             
                             {/* Modal Content */}
                             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                                <div className="prose prose-invert max-w-none">
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkMath]}
-                                        rehypePlugins={[rehypeKatex]}
-                                        components={{
-                                            h1: ({children}) => <h1 className="text-2xl font-black uppercase text-phantom-red mb-4 border-b-2 border-phantom-red/30 pb-2">{children}</h1>,
-                                            h2: ({children}) => <h2 className="text-xl font-bold uppercase text-gray-100 mt-6 mb-3">{children}</h2>,
-                                            h3: ({children}) => <h3 className="text-lg font-bold text-gray-200 mt-4 mb-2">{children}</h3>,
-                                            p: ({children}) => <p className="text-gray-300 mb-3 leading-relaxed">{children}</p>,
-                                            ul: ({children}) => <ul className="list-none space-y-2 my-4">{children}</ul>,
-                                            li: ({children}) => (
-                                                <li className="flex items-start gap-3 text-gray-300">
-                                                    <span className="text-phantom-red/80 font-black mt-1">▸</span>
-                                                    <span>{children}</span>
-                                                </li>
-                                            ),
-                                            strong: ({children}) => <strong className="text-phantom-yellow/90 font-bold">{children}</strong>,
-                                            code: ({className, children, ...props}) => {
-                                                const match = /language-(\w+)/.exec(className || '')
-                                                return match ? (
-                                                    <code className={`${className} bg-black/50 text-green-400 p-3 block overflow-x-auto my-3 border-l-2 border-phantom-red/60 font-mono`} {...props}>
-                                                        {children}
-                                                    </code>
-                                                ) : (
-                                                    <code className="bg-black/50 text-phantom-yellow/90 px-2 py-1 font-mono text-sm" {...props}>
-                                                        {children}
-                                                    </code>
-                                                )
-                                            }
-                                        }}
-                                    >
-                                        {activeToolResult.content}
-                                    </ReactMarkdown>
-                                </div>
+                                {/* Detect and render Mermaid diagrams for mindmap/infomap tools */}
+                                {(() => {
+                                    const isMermaidTool = activeToolResult.type === 'mindmap' || activeToolResult.type === 'infomap';
+                                    const mermaidMatch = activeToolResult.content.match(/```mermaid\n([\s\S]*?)\n```/);
+                                    
+                                    if (isMermaidTool && mermaidMatch) {
+                                        const mermaidCode = mermaidMatch[1];
+                                        const otherContent = activeToolResult.content.replace(/```mermaid\n[\s\S]*?\n```/, '').trim();
+                                        
+                                        return (
+                                            <div className="space-y-6">
+                                                {/* Interactive Mermaid Diagram */}
+                                                <MermaidDiagram chart={mermaidCode} />
+                                                
+                                                {/* Other markdown content (if any) */}
+                                                {otherContent && (
+                                                    <div className="prose prose-invert max-w-none">
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkMath]}
+                                                            rehypePlugins={[rehypeKatex]}
+                                                            components={{
+                                                                h1: ({children}) => <h1 className="text-2xl font-black uppercase text-phantom-red mb-4 border-b-2 border-phantom-red/30 pb-2">{children}</h1>,
+                                                                h2: ({children}) => <h2 className="text-xl font-bold uppercase text-gray-100 mt-6 mb-3">{children}</h2>,
+                                                                h3: ({children}) => <h3 className="text-lg font-bold text-gray-200 mt-4 mb-2">{children}</h3>,
+                                                                p: ({children}) => <p className="text-gray-300 mb-3 leading-relaxed">{children}</p>,
+                                                                ul: ({children}) => <ul className="list-none space-y-2 my-4">{children}</ul>,
+                                                                li: ({children}) => (
+                                                                    <li className="flex items-start gap-3 text-gray-300">
+                                                                        <span className="text-phantom-red/80 font-black mt-1">▸</span>
+                                                                        <span>{children}</span>
+                                                                    </li>
+                                                                ),
+                                                                strong: ({children}) => <strong className="text-phantom-yellow/90 font-bold">{children}</strong>,
+                                                                code: ({className, children, ...props}) => {
+                                                                    const match = /language-(\w+)/.exec(className || '')
+                                                                    return match ? (
+                                                                        <code className={`${className} bg-black/50 text-green-400 p-3 block overflow-x-auto my-3 border-l-2 border-phantom-red/60 font-mono`} {...props}>
+                                                                            {children}
+                                                                        </code>
+                                                                    ) : (
+                                                                        <code className="bg-black/50 text-phantom-yellow/90 px-2 py-1 font-mono text-sm" {...props}>
+                                                                            {children}
+                                                                        </code>
+                                                                    )
+                                                                }
+                                                            }}
+                                                        >
+                                                            {otherContent}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    } else {
+                                        // Regular markdown rendering for other tools
+                                        return (
+                                            <div className="prose prose-invert max-w-none">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkMath]}
+                                                    rehypePlugins={[rehypeKatex]}
+                                                    components={{
+                                                        h1: ({children}) => <h1 className="text-2xl font-black uppercase text-phantom-red mb-4 border-b-2 border-phantom-red/30 pb-2">{children}</h1>,
+                                                        h2: ({children}) => <h2 className="text-xl font-bold uppercase text-gray-100 mt-6 mb-3">{children}</h2>,
+                                                        h3: ({children}) => <h3 className="text-lg font-bold text-gray-200 mt-4 mb-2">{children}</h3>,
+                                                        p: ({children}) => <p className="text-gray-300 mb-3 leading-relaxed">{children}</p>,
+                                                        ul: ({children}) => <ul className="list-none space-y-2 my-4">{children}</ul>,
+                                                        li: ({children}) => (
+                                                            <li className="flex items-start gap-3 text-gray-300">
+                                                                <span className="text-phantom-red/80 font-black mt-1">▸</span>
+                                                                <span>{children}</span>
+                                                            </li>
+                                                        ),
+                                                        strong: ({children}) => <strong className="text-phantom-yellow/90 font-bold">{children}</strong>,
+                                                        code: ({className, children, ...props}) => {
+                                                            const match = /language-(\w+)/.exec(className || '')
+                                                            return match ? (
+                                                                <code className={`${className} bg-black/50 text-green-400 p-3 block overflow-x-auto my-3 border-l-2 border-phantom-red/60 font-mono`} {...props}>
+                                                                    {children}
+                                                                </code>
+                                                            ) : (
+                                                                <code className="bg-black/50 text-phantom-yellow/90 px-2 py-1 font-mono text-sm" {...props}>
+                                                                    {children}
+                                                                </code>
+                                                            )
+                                                        }
+                                                    }}
+                                                >
+                                                    {activeToolResult.content}
+                                                </ReactMarkdown>
+                                            </div>
+                                        );
+                                    }
+                                })()}
                             </div>
                         </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            
+            {/* Citation Hover Preview */}
+            <AnimatePresence>
+                {hoveredCitation && (
+                    <CitationPreview
+                        citation={hoveredCitation.citation}
+                        position={{ x: hoveredCitation.x, y: hoveredCitation.y }}
+                        onViewFull={() => {
+                            handleJumpToCitation(hoveredCitation.citation);
+                            setHoveredCitation(null);
+                        }}
+                        onOpenSplit={() => {
+                            handleCitationClick(hoveredCitation.citation);
+                            setHoveredCitation(null);
+                        }}
+                    />
+                )}
+            </AnimatePresence>
+            
+            {/* Split View PDF Panel */}
+            <AnimatePresence>
+                {splitViewPdf && (
+                    <motion.div
+                        initial={{ opacity: 0, x: 100 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 100 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="absolute right-0 top-0 bottom-0 w-1/2 bg-[#0a0a0a] border-l-4 border-phantom-red/60 shadow-[-8px_0_20px_rgba(0,0,0,0.5)] z-[2500] flex flex-col"
+                    >
+                        {/* Split View Header */}
+                        <div className="bg-phantom-red/90 p-4 border-b-2 border-gray-800 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-white/20 border border-white/30 flex items-center justify-center">
+                                    <FileText size={18} className="text-white" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-white font-black text-sm uppercase tracking-wider truncate">
+                                        {splitViewPdf.title}
+                                    </h3>
+                                    <p className="text-white/70 text-xs">Page {splitViewPdf.page}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setSplitViewPdf(null);
+                                    playSfx('cancel');
+                                }}
+                                className="p-2 bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                            >
+                                <Minimize2 size={16} className="text-white" />
+                            </button>
+                        </div>
+                        
+                        {/* PDF Viewer */}
+                        <div className="flex-1 overflow-auto bg-gray-900 p-4 flex items-center justify-center">
+                            <iframe
+                                src={`/api/papers/${splitViewPdf.paperId}/pdf#page=${splitViewPdf.page}`}
+                                className="w-full h-full border-2 border-gray-700"
+                                title="PDF Preview"
+                            />
+                        </div>
+                        
+                        {/* Actions */}
+                        <div className="p-3 bg-[#0f0f0f] border-t-2 border-gray-800 flex gap-2">
+                            <button
+                                onClick={() => {
+                                    const citation = hoveredCitation?.citation || {
+                                        page: splitViewPdf.page,
+                                        source: splitViewPdf.title,
+                                        bbox: '',
+                                        index: 0,
+                                        text: ''
+                                    };
+                                    handleJumpToCitation(citation);
+                                    setSplitViewPdf(null);
+                                }}
+                                className="flex-1 bg-phantom-red/90 hover:bg-phantom-red text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.3)]"
+                            >
+                                Open Full Reader
+                            </button>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

@@ -403,18 +403,26 @@ function App() {
   // NEW: Upload to Vault (Optimized)
   const handleBulkImport = useCallback(async (files: FileList) => { 
       playSfx('confirm');
+      console.log(`[BULK IMPORT] Starting: ${files.length} files`);
       setUploadStatus({ active: true, current: 0, total: files.length });
       
       for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          if (file.type !== 'application/pdf') continue;
+          console.log(`[BULK IMPORT] Processing ${i+1}/${files.length}: ${file.name}`);
+          
+          if (file.type !== 'application/pdf') {
+              console.warn(`[BULK IMPORT] Skipping non-PDF: ${file.name}`);
+              continue;
+          }
 
           try {
               const formData = new FormData();
               formData.append('file', file);
+              console.log(`[BULK IMPORT] Uploading ${file.name}...`);
               const res = await fetch('/api/upload', { method: 'POST', body: formData });
               if (res.ok) {
                   const p = await res.json();
+                  console.log(`[BULK IMPORT] ✓ ${file.name} uploaded (ID: ${p.id})`);
                   const mappedPaper = {
                       ...p,
                       type: "PDF",
@@ -426,12 +434,16 @@ function App() {
                   // handleLevelUp cannot be called here if it's not a dependency, 
                   // but we can just update stats directly or add dependency
                   setStats(prev => ({ ...prev, proficiency: Math.min(10, prev.proficiency + 1) }));
+              } else {
+                  const error = await res.text();
+                  console.error(`[BULK IMPORT] ✗ ${file.name} failed: ${error}`);
               }
           } catch (e) {
-              console.error("Upload failed:", e);
+              console.error(`[BULK IMPORT] ✗ ${file.name} exception:`, e);
           }
           setUploadStatus(prev => ({ ...prev, current: i + 1 }));
       }
+      console.log(`[BULK IMPORT] Complete`);
       setTimeout(() => {
           setUploadStatus({ active: false, current: 0, total: 0 });
           setActiveMenu('all'); 
