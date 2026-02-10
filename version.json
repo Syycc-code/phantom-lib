@@ -1,4 +1,4 @@
 {
-    "version": "1.2.0",
-    "changelog": "v1.2.0: Studio工具箱全面增强 - 实时编辑、全屏模式、历史管理、键盘快捷键、精美动画、增强引用预览、PDF页面跳转修复。"
+    "version": "1.2.1",
+    "changelog": "v1.2.1: Critical Stability Fixes - 修复后端RAG索引内存溢出导致崩溃、文件上传后视图同步问题、阅读器退出状态清理问题。新增RAG禁用开关和崩溃诊断工具。"
 }

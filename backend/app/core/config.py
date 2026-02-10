@@ -33,6 +33,9 @@ class Settings:
     
     # Paths
     UPLOAD_DIR: str = os.path.join(BASE_DIR, "uploads")
+    
+    # RAG Control (Emergency Disable)
+    ENABLE_RAG: bool = os.getenv("ENABLE_RAG", "true").lower() in ("true", "1", "yes")
 
 settings = Settings()
 

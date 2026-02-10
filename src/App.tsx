@@ -433,6 +433,9 @@ function App() {
       console.log(`[BULK IMPORT] Starting: ${files.length} files`);
       setUploadStatus({ active: true, current: 0, total: files.length });
       
+      // IMPORTANT: Switch to 'all' view immediately so user can see new uploads
+      setActiveMenu('all');
+      
       for (let i = 0; i < files.length; i++) {
           const file = files[i];
           console.log(`[BULK IMPORT] Processing ${i+1}/${files.length}: ${file.name}`);
@@ -473,7 +476,6 @@ function App() {
       console.log(`[BULK IMPORT] Complete`);
       setTimeout(() => {
           setUploadStatus({ active: false, current: 0, total: 0 });
-          setActiveMenu('all'); 
       }, 2000);
   }, [playSfx]); // Removed handleLevelUp to avoid circular dependency chain
 
@@ -516,6 +518,9 @@ function App() {
               };
               setPapers(prev => [mappedPaper, ...prev]);
               handleLevelUp('proficiency');
+              
+              // IMPORTANT: Switch to 'all' view immediately so user can see new upload
+              setActiveMenu('all');
               
               // Show complete stage
               setHackProgress({ show: true, stage: 'complete', message: 'Treasure secured!' });
@@ -890,7 +895,7 @@ function App() {
             </AnimatePresence>
         )}
       <AnimatePresence>
-        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => setIsReading(false)} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} fontStyle={equipped.font_style} />}
+        {isReading && readingPaper && <ReaderOverlay paper={readingPaper} onClose={() => { setIsReading(false); setReadingPaper(null); }} onLevelUp={handleLevelUp} playSfx={playSfx} onSaveNote={handleSaveNote} markerStyle={equipped.effect_marker} fontStyle={equipped.font_style} />}
         {showMindPalace && <MindPalace papers={papers} onClose={() => setShowMindPalace(false)} onRead={handleRead} playSfx={playSfx} />}
         {confidantData.show && (
             <ConfidantOverlay 

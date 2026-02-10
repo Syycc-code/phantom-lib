@@ -160,14 +160,18 @@ def index_document(chunks_data: list, filename: str):
     
     # Batch processing to avoid hitting limits
     # REDUCED: 10 -> 3 to prevent memory overflow and crashes
-    BATCH_SIZE = 3
+    # FURTHER REDUCED to 1 for maximum stability
+    BATCH_SIZE = 1
     total_chunks = len(texts)
     
     print(f"[MEMORY] Indexing {total_chunks} chunks from {filename} with spatial data...")
-    print(f"[MEMORY] Using batch size: {BATCH_SIZE} (safer for stability)")
+    print(f"[MEMORY] Using batch size: {BATCH_SIZE} (maximum stability mode)")
     
     successful_batches = 0
     failed_batches = 0
+    
+    import gc
+    import sys
     
     for i in range(0, total_chunks, BATCH_SIZE):
         batch_num = (i // BATCH_SIZE) + 1
@@ -179,8 +183,14 @@ def index_document(chunks_data: list, filename: str):
         batch_ids = ids[i:i+BATCH_SIZE]
         
         try:
+            # Pre-encoding memory check
+            sys.stdout.flush()  # Force flush logs before potentially crashing operation
+            
             # Encode with timeout protection
             embeddings = embedder.encode(batch_texts, show_progress_bar=False).tolist()
+            
+            # Force flush after encoding
+            sys.stdout.flush()
             
             # Add to ChromaDB with retry logic
             max_retries = 3
@@ -203,13 +213,24 @@ def index_document(chunks_data: list, filename: str):
                     else:
                         raise db_err
             
+            # Clean up memory after each batch
+            del embeddings
+            gc.collect()
+            
             # Brief pause between batches to reduce memory pressure
             import time
-            time.sleep(0.1)
+            time.sleep(0.2)  # Increased from 0.1 to 0.2
             
         except Exception as e:
             failed_batches += 1
             print(f"  [RAG] ✗ Batch {batch_num} FAILED: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            sys.stdout.flush()
+            
+            # Force garbage collection on error
+            gc.collect()
+            
             # Don't crash - continue with remaining batches
             continue
     

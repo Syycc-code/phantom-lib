@@ -38,6 +38,8 @@ async def process_paper(
     Returns:
         处理完成的Paper对象
     """
+    from app.core.config import settings
+    
     # 1. 保存文件到磁盘
     file_id = str(uuid.uuid4())
     save_path = f"{settings.UPLOAD_DIR}/{file_id}.pdf"
@@ -64,14 +66,18 @@ async def process_paper(
     
     try:
         # 4. 触发后台任务（添加安全检查和崩溃保护）
-        # 将同步的 index_document 放入线程池，避免阻塞
-        # Updated: Pass chunks (with bbox) instead of raw text
-        # CRITICAL: Use Paper ID as source for RAG to allow filtering by Folder
-        rag_source = str(new_paper.id)
-        
-        # Create task with exception handler
-        index_task = asyncio.create_task(asyncio.to_thread(_safe_index_document, chunks, rag_source))
-        index_task.add_done_callback(_task_exception_handler)
+        # Check if RAG is enabled
+        if not settings.ENABLE_RAG:
+            print("[RAG] RAG is disabled via ENABLE_RAG setting. Skipping indexing.")
+        else:
+            # 将同步的 index_document 放入线程池，避免阻塞
+            # Updated: Pass chunks (with bbox) instead of raw text
+            # CRITICAL: Use Paper ID as source for RAG to allow filtering by Folder
+            rag_source = str(new_paper.id)
+            
+            # Create task with exception handler
+            index_task = asyncio.create_task(asyncio.to_thread(_safe_index_document, chunks, rag_source))
+            index_task.add_done_callback(_task_exception_handler)
         
         # 只在有ID和abstract时触发分析
         if new_paper.id and new_paper.abstract:
@@ -86,15 +92,41 @@ async def process_paper(
 
 def _safe_index_document(chunks: list, filename: str):
     """Wrapper to prevent RAG crashes from killing the app"""
+    import sys
     try:
-        print(f"[RAG] Starting background indexing for: {filename}")
+        print(f"[RAG] Starting background indexing for: {filename}", flush=True)
+        sys.stdout.flush()  # Force flush before starting
+        
+        # Add system resource check
+        try:
+            import psutil
+            process = psutil.Process()
+            mem_info = process.memory_info()
+            print(f"[RAG] Memory before indexing: {mem_info.rss / 1024 / 1024:.1f} MB", flush=True)
+        except:
+            pass  # psutil might not be available
+        
         index_document(chunks, filename)
-        print(f"[RAG] Background indexing completed for: {filename}")
+        
+        print(f"[RAG] Background indexing completed for: {filename}", flush=True)
+        sys.stdout.flush()
+    except KeyboardInterrupt:
+        print(f"[RAG INDEX ERROR] Interrupted by user", flush=True)
+        sys.stdout.flush()
+        raise
+    except MemoryError as e:
+        import traceback
+        print(f"[RAG INDEX ERROR] OUT OF MEMORY indexing {filename}: {e}", flush=True)
+        print(f"[RAG INDEX ERROR] This file may be too large to index", flush=True)
+        traceback.print_exc()
+        sys.stdout.flush()
+        # Don't re-raise - just log and continue
     except Exception as e:
         import traceback
-        print(f"[RAG INDEX ERROR] Failed to index {filename}: {e}")
-        print(f"[RAG INDEX ERROR] Traceback:")
+        print(f"[RAG INDEX ERROR] Failed to index {filename}: {e}", flush=True)
+        print(f"[RAG INDEX ERROR] Traceback:", flush=True)
         traceback.print_exc()
+        sys.stdout.flush()
         # Don't re-raise - just log and continue
 
 def _task_exception_handler(task):
