@@ -19,72 +19,113 @@ interface CitationPreviewProps {
 export default function CitationPreview({ citation, position, onViewFull, onOpenSplit }: CitationPreviewProps) {
     return (
         <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.9, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.15 }}
-            className="fixed z-[3000] pointer-events-auto"
+            exit={{ opacity: 0, scale: 0.9, y: 15 }}
+            transition={{ 
+                type: "spring",
+                stiffness: 400,
+                damping: 25
+            }}
+            className="fixed z-[3500] pointer-events-auto"
             style={{
                 left: position.x,
-                top: position.y - 10,
+                top: position.y - 20,
                 transform: 'translate(-50%, -100%)',
-                maxWidth: '400px'
+                maxWidth: '500px',
+                minWidth: '350px'
             }}
             onClick={(e) => e.stopPropagation()}
+            onMouseEnter={(e) => e.stopPropagation()}
         >
+            {/* 外发光效果 */}
+            <div className="absolute inset-0 bg-phantom-red/30 blur-xl" />
+            
             {/* 悬浮窗主体 */}
-            <div className="bg-[#0a0a0a] border-2 border-phantom-red/60 shadow-[8px_8px_0px_rgba(230,0,18,0.3)] overflow-hidden">
-                {/* 头部 */}
-                <div className="bg-phantom-red/90 p-3 border-b-2 border-gray-800 flex items-center gap-2">
-                    <div className="w-6 h-6 bg-white/20 border border-white/30 flex items-center justify-center">
-                        <FileText size={14} className="text-white" />
+            <div className="relative bg-[#0a0a0a] border-4 border-phantom-red shadow-[0_0_30px_rgba(230,0,18,0.5),_10px_10px_0px_rgba(0,0,0,0.4)] overflow-hidden">
+                {/* 头部 - 增强视觉 */}
+                <div className="bg-gradient-to-r from-phantom-red via-phantom-red/90 to-phantom-red p-4 border-b-4 border-black flex items-center gap-3 relative overflow-hidden">
+                    {/* 动态背景 */}
+                    <motion.div
+                        className="absolute inset-0 opacity-10"
+                        animate={{
+                            backgroundPosition: ['0% 0%', '100% 100%'],
+                        }}
+                        transition={{
+                            duration: 10,
+                            repeat: Infinity,
+                            ease: 'linear',
+                        }}
+                        style={{
+                            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)',
+                            backgroundSize: '200% 200%',
+                        }}
+                    />
+                    
+                    <div className="relative w-10 h-10 bg-white/20 border-2 border-white/40 flex items-center justify-center backdrop-blur-sm">
+                        <FileText size={20} className="text-white" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-white font-black text-xs uppercase tracking-wider truncate">
-                            Citation [{citation.index}]
+                    <div className="relative flex-1 min-w-0">
+                        <p className="text-white font-black text-sm uppercase tracking-wider truncate flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-phantom-yellow text-black text-xs">[{citation.index}]</span>
+                            CITATION PREVIEW
                         </p>
-                        <p className="text-white/70 text-[10px] truncate">
-                            {citation.source} · p.{citation.page}
+                        <p className="text-phantom-yellow text-xs font-bold truncate mt-1">
+                            {citation.source} · Page {citation.page}
                         </p>
                     </div>
                 </div>
 
-                {/* 引用内容 */}
-                <div className="p-4 bg-[#0f0f0f]">
-                    {/* 装饰性引号 */}
-                    <div className="text-phantom-red/40 font-serif text-4xl leading-none mb-2">"</div>
+                {/* 引用内容 - 更清晰的排版 */}
+                <div className="p-5 bg-gradient-to-b from-[#0f0f0f] to-[#0a0a0a]">
+                    {/* 装饰性引号 - 更大更明显 */}
+                    <div className="text-phantom-red/50 font-serif text-6xl leading-none mb-3 select-none">"</div>
                     
-                    {/* 引用文本 */}
-                    <p className="text-white text-sm leading-relaxed italic pl-4 border-l-2 border-phantom-red/40 mb-3">
-                        {citation.text}
-                    </p>
+                    {/* 引用文本 - 增强可读性 */}
+                    <div className="relative">
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-phantom-red via-phantom-yellow to-phantom-red" />
+                        <p className="text-white text-base leading-relaxed italic pl-6 pr-2">
+                            {citation.text}
+                        </p>
+                    </div>
 
-                    {/* 操作按钮 */}
-                    <div className="flex gap-2 mt-4">
+                    {/* 操作按钮 - 更明显的分隔 */}
+                    <div className="flex gap-3 mt-5 pt-4 border-t-2 border-gray-800">
                         <button
                             onClick={onOpenSplit}
-                            className="flex-1 bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.3)] hover:shadow-[3px_3px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-1px] hover:translate-y-[-1px] flex items-center justify-center gap-2"
+                            className="flex-1 bg-gray-800 hover:bg-gray-700 text-white border-2 border-gray-600 hover:border-phantom-yellow px-4 py-3 text-sm font-black uppercase tracking-wider transition-all shadow-[3px_3px_0px_rgba(0,0,0,0.4)] hover:shadow-[4px_4px_0px_rgba(252,236,12,0.3)] hover:translate-x-[-1px] hover:translate-y-[-1px] flex items-center justify-center gap-2"
                         >
-                            <Maximize2 size={14} />
+                            <Maximize2 size={16} />
                             Split View
                         </button>
                         <button
                             onClick={onViewFull}
-                            className="flex-1 bg-phantom-red/90 hover:bg-phantom-red text-white border border-phantom-red/30 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.3)] hover:shadow-[3px_3px_0px_rgba(230,0,18,0.4)] hover:translate-x-[-1px] hover:translate-y-[-1px] flex items-center justify-center gap-2"
+                            className="flex-1 bg-phantom-red hover:bg-phantom-yellow hover:text-black text-white border-2 border-phantom-red/30 hover:border-phantom-red px-4 py-3 text-sm font-black uppercase tracking-wider transition-all shadow-[3px_3px_0px_rgba(230,0,18,0.4)] hover:shadow-[5px_5px_0px_rgba(230,0,18,0.5)] hover:translate-x-[-1px] hover:translate-y-[-1px] flex items-center justify-center gap-2"
                         >
-                            <ExternalLink size={14} />
+                            <ExternalLink size={16} />
                             Full Page
                         </button>
                     </div>
                 </div>
 
-                {/* 底部装饰条 */}
-                <div className="h-1 bg-gradient-to-r from-phantom-red/60 via-phantom-yellow/60 to-phantom-red/60" />
+                {/* 底部装饰条 - 更宽更明显 */}
+                <motion.div 
+                    className="h-2 bg-gradient-to-r from-phantom-red via-phantom-yellow to-phantom-red"
+                    animate={{
+                        opacity: [0.7, 1, 0.7],
+                    }}
+                    transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                    }}
+                />
             </div>
 
-            {/* 指向箭头 */}
-            <div className="absolute left-1/2 bottom-0 transform translate-y-full -translate-x-1/2">
-                <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-phantom-red/60" />
+            {/* 指向箭头 - 更大更明显 */}
+            <div className="absolute left-1/2 bottom-0 transform translate-y-full -translate-x-1/2 flex flex-col items-center">
+                <div className="w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-phantom-red" />
+                <div className="w-1 h-2 bg-phantom-red" />
             </div>
         </motion.div>
     );

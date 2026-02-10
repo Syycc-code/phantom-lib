@@ -205,6 +205,8 @@ function App() {
 
   const [papers, setPapers] = useState<Paper[]>([]); // Initialize empty, load from backend
   const [folders, setFolders] = useState<FolderType[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true); // 添加加载状态
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null); // 添加错误状态
   const [stats, setStats] = useState<PhantomStats>(() => { const saved = localStorage.getItem('phantom_stats'); return saved ? JSON.parse(saved) : INITIAL_STATS; });
   
   // Shop State
@@ -225,12 +227,19 @@ function App() {
 
   // Load Papers and Folders from Vault (Backend)
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (retryCount = 0) => {
       try {
+        setIsLoadingData(true);
+        setDataLoadError(null);
+        
+        console.log('[Phantom Library] 开始加载数据...'); // 调试日志
+        
         // Fetch Papers
         const resPapers = await fetch('/api/papers');
         if (resPapers.ok) {
           const data = await resPapers.json();
+          console.log('[Phantom Library] 成功加载论文:', data.length, '篇'); // 调试日志
+          
           const mappedPapers = data.map((p: any) => ({
             ...p,
             type: p.url && p.url.toLowerCase().includes('arxiv') ? 'Arxiv' : 'PDF',
@@ -241,16 +250,34 @@ function App() {
             ocrStatus: 'complete'
           }));
           setPapers(mappedPapers);
+        } else {
+          throw new Error(`加载论文失败: HTTP ${resPapers.status}`);
         }
         
         // Fetch Folders
         const resFolders = await fetch('/api/folders/');
         if (resFolders.ok) {
             const data = await resFolders.json();
+            console.log('[Phantom Library] 成功加载文件夹:', data.length, '个'); // 调试日志
             setFolders(data.map((f: any) => ({ ...f, id: f.id.toString() }))); // Ensure ID is string for frontend
+        } else {
+          console.warn('[Phantom Library] 加载文件夹失败，但继续运行');
         }
+        
+        setIsLoadingData(false);
+        console.log('[Phantom Library] 数据加载完成！'); // 调试日志
       } catch (e) {
-        console.error("Failed to fetch data:", e);
+        console.error("[Phantom Library] 数据加载失败:", e);
+        setDataLoadError(e instanceof Error ? e.message : '未知错误');
+        
+        // 重试机制：最多重试3次
+        if (retryCount < 3) {
+          console.log(`[Phantom Library] ${retryCount + 1}秒后重试... (${retryCount + 1}/3)`);
+          setTimeout(() => fetchData(retryCount + 1), 1000 * (retryCount + 1));
+        } else {
+          setIsLoadingData(false);
+          console.error('[Phantom Library] 重试失败，请检查后端服务是否正常运行');
+        }
       }
     };
     
@@ -740,6 +767,26 @@ function App() {
           --phantom-red: ${currentThemeColor} !important;
         }
       `}</style>
+      
+      {/* 加载屏幕 */}
+      {isLoadingData && (
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
+          <div className="text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 border-4 border-phantom-red border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+            <h2 className="text-3xl font-black text-phantom-red mb-2 uppercase tracking-wider">LOADING VAULT</h2>
+            <p className="text-gray-400 text-sm">正在加载文献库...</p>
+            {dataLoadError && (
+              <div className="mt-4 p-4 bg-red-900/20 border border-red-500 max-w-md mx-auto">
+                <p className="text-red-400 text-xs">{dataLoadError}</p>
+                <p className="text-gray-500 text-xs mt-2">正在重试连接...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       <SystemMonitor variant={equipped.effect_monitor} /> {/* Add Monitor */}
       <UploadProgress active={uploadStatus.active} current={uploadStatus.current} total={uploadStatus.total} />
       <HackProgress show={hackProgress.show} stage={hackProgress.stage} message={hackProgress.message} />

@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Paperclip, Search, Plus, ChevronLeft, ChevronRight, Video, Mic2, Map, Presentation, BarChart3, Lightbulb, Sparkles, Clock, Copy, Download, Loader, Cpu, FileText, MoreVertical, RefreshCw, Trash2, Minimize2 } from 'lucide-react';
+import { X, Send, Paperclip, Search, Plus, ChevronLeft, ChevronRight, Video, Mic2, Map, Presentation, BarChart3, Lightbulb, Sparkles, Clock, Copy, Download, Loader, Cpu, FileText, MoreVertical, RefreshCw, Trash2, Minimize2, Edit3, Save, XCircle, Maximize2, History } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import CitationPreview from '../shared/CitationPreview';
 import MermaidDiagram from '../shared/MermaidDiagram';
+import StudioLoadingOverlay from '../shared/StudioLoadingOverlay';
 
 interface Citation {
     index: number;
@@ -54,8 +55,14 @@ export default function ConfidantOverlay({ initialMessages, onClose, playSfx, sc
     const messageInputRef = useRef<HTMLInputElement>(null);
     
     // Studio tool states
-    const [activeToolResult, setActiveToolResult] = useState<{ type: string; content: string; title: string } | null>(null);
+    const [activeToolResult, setActiveToolResult] = useState<{ type: string; content: string; title: string; id?: string; timestamp?: number } | null>(null);
     const [isGeneratingTool, setIsGeneratingTool] = useState(false);
+    const [generatingToolInfo, setGeneratingToolInfo] = useState<{ type: string; name: string } | null>(null);
+    const [isEditingTool, setIsEditingTool] = useState(false);
+    const [editedContent, setEditedContent] = useState('');
+    const [isToolFullscreen, setIsToolFullscreen] = useState(false);
+    const [studioHistory, setStudioHistory] = useState<Array<{ id: string; type: string; title: string; content: string; timestamp: number }>>([]);
+    const [showStudioHistory, setShowStudioHistory] = useState(false);
     
     // History states
     const [chatHistory, setChatHistory] = useState<Array<{ id: string; title: string; messages: ChatMessage[]; date: Date }>>([]);
@@ -189,52 +196,108 @@ export default function ConfidantOverlay({ initialMessages, onClose, playSfx, sc
     // Generate content using Studio tools
     const handleToolGenerate = async (toolType: string) => {
         playSfx('confirm');
-        setIsGeneratingTool(true);
         
-        // Collect conversation context
+        // Find tool info
+        const toolInfo = studioTools.find(t => t.id === toolType);
+        const toolName = toolInfo?.name || toolType;
+        
+        setIsGeneratingTool(true);
+        setGeneratingToolInfo({ type: toolType, name: toolName });
+        
+        // Get selected papers from sources list
+        const selectedPapers = sources.filter(s => s.checked);
+        const selectedPaperTitles = selectedPapers.map(s => s.title).join(', ');
+        
+        // Collect conversation context (fallback if no papers selected)
         const conversationContext = messages
             .slice(-10)  // Last 10 messages
             .map(m => `${m.role === 'user' ? 'User' : 'Oracle'}: ${m.content}`)
             .join('\n\n');
+        
+        // Determine the context to use
+        const hasSelectedPapers = selectedPapers.length > 0;
+        const contextSection = hasSelectedPapers 
+            ? `SELECTED PAPERS:\n${selectedPaperTitles}\n\nCONVERSATION CONTEXT:\n${conversationContext}`
+            : `CONVERSATION:\n${conversationContext}`;
         
         let prompt = '';
         let title = '';
         
         switch (toolType) {
             case 'mindmap':
-                title = 'Mind Map';
-                prompt = `Based on the following academic discussion, generate a mind map in Mermaid diagram format.
+                title = hasSelectedPapers 
+                    ? `Knowledge Tree: ${selectedPapers.length > 1 ? 'Multiple Papers' : selectedPapers[0].title.substring(0, 30)}` 
+                    : 'Knowledge Tree';
+                prompt = `Based on the following ${hasSelectedPapers ? 'SELECTED PAPERS and discussion' : 'academic discussion'}, generate a hierarchical knowledge tree in Mermaid flowchart format.
 
-Conversation:
-${conversationContext}
+${contextSection}
 
-Output a Mermaid mindmap diagram using this syntax:
+IMPORTANT: The knowledge tree should focus on ${hasSelectedPapers ? 'the key concepts, methodologies, and findings from the SELECTED PAPERS above' : 'the topics discussed in the conversation'}.
+
+STRICT RULES FOR MERMAID FLOWCHART SYNTAX:
+1. Start with exactly: flowchart TD
+2. Use arrow syntax: PARENT --> CHILD
+3. Each node must have a unique ID (A, B, C, A1, A2, etc.)
+4. Node styles:
+   - Root node: A["Root Topic"] (use quotes for text with spaces)
+   - Use different shapes for different levels if desired: 
+     - Round box: A(Round Text)
+     - Stadium: A([Stadium Text])
+     - Subroutine: A[[Subroutine Text]]
+     - Cylinder: A[(Database)]
+     - Circle: A((Circle))
+   - Color classes: add class definitions at the end
+5. Use classDef to define colors for different levels
+6. Keep node text concise (under 40 characters)
+7. Use proper indentation for readability
+
+Example of PERFECT syntax:
 \`\`\`mermaid
-mindmap
-  root((Central Topic))
-    Branch 1
-      Sub-topic 1.1
-      Sub-topic 1.2
-    Branch 2
-      Sub-topic 2.1
-      Sub-topic 2.2
+flowchart TD
+    A["Consensus Protocols"] --> B["Byzantine Fault Tolerance"]
+    A --> C["Proof of Stake"]
+    A --> D["Proof of Work"]
+    
+    B --> B1["PBFT Variants"]
+    B --> B2["Tendermint"]
+    B --> B3["HotStuff"]
+    
+    C --> C1["Security Guarantees"]
+    C --> C2["Validator Selection"]
+    C --> C3["Slashing Conditions"]
+    
+    D --> D1["Mining Difficulty"]
+    D --> D2["51% Attacks"]
+    
+    classDef root fill:#E60012,stroke:#FCEC0C,stroke-width:3px,color:#fff
+    classDef level1 fill:#1a1a1a,stroke:#E60012,stroke-width:2px,color:#fff
+    classDef level2 fill:#2a2a2a,stroke:#FCEC0C,stroke-width:1px,color:#fff
+    
+    class A root
+    class B,C,D level1
+    class B1,B2,B3,C1,C2,C3,D1,D2 level2
 \`\`\`
 
-Create a comprehensive academic mind map with:
-- Central research question/topic at root
-- 3-5 major conceptual branches
-- Sub-branches with detailed points, methods, findings
-- Clear hierarchical structure
+Create a comprehensive knowledge tree with:
+- Central research question/topic as root node at top
+- 3-5 major conceptual branches (Level 1)
+- 2-4 sub-branches per major branch (Level 2)
+- Optional deeper levels (Level 3) if relevant
+- Use classDef to style different levels with P5 colors (red #E60012, yellow #FCEC0C)
+- Ensure logical flow from top to bottom
 
 Output ONLY the mermaid code block, nothing else.`;
                 break;
                 
             case 'report':
-                title = 'Research Report';
-                prompt = `Based on the following academic discussion, generate a comprehensive research report in Markdown format.
+                title = hasSelectedPapers 
+                    ? `Research Report: ${selectedPapers.length > 1 ? 'Multiple Papers' : selectedPapers[0].title.substring(0, 30)}`
+                    : 'Research Report';
+                prompt = `Based on the following ${hasSelectedPapers ? 'SELECTED PAPERS and discussion' : 'academic discussion'}, generate a comprehensive research report in Markdown format.
 
-Conversation:
-${conversationContext}
+${contextSection}
+
+IMPORTANT: This report should focus on ${hasSelectedPapers ? 'analyzing and synthesizing the SELECTED PAPERS listed above' : 'the topics discussed in the conversation'}.
 
 Structure the report with these sections:
 # Executive Summary
@@ -265,11 +328,14 @@ Make it professional, well-structured, and suitable for academic contexts.`;
                 break;
                 
             case 'flashcards':
-                title = 'Study Flashcards';
-                prompt = `Based on the following academic discussion, generate study flashcards in Markdown format.
+                title = hasSelectedPapers 
+                    ? `Study Flashcards: ${selectedPapers.length > 1 ? 'Multiple Papers' : selectedPapers[0].title.substring(0, 30)}`
+                    : 'Study Flashcards';
+                prompt = `Based on the following ${hasSelectedPapers ? 'SELECTED PAPERS and discussion' : 'academic discussion'}, generate study flashcards in Markdown format.
 
-Conversation:
-${conversationContext}
+${contextSection}
+
+IMPORTANT: These flashcards should cover key concepts from ${hasSelectedPapers ? 'the SELECTED PAPERS listed above' : 'the discussed topics'}.
 
 Create 10-15 flashcards covering key concepts with this format:
 ---
@@ -337,32 +403,35 @@ Create poster content with these sections:
 Conversation:
 ${conversationContext}
 
-Output a Mermaid flowchart showing:
-- Key concepts/components as nodes
-- Relationships and information flow as arrows
-- Process steps or dependencies
+Output a Mermaid flowchart showing information flow.
 
-Use this syntax:
+STRICT SYNTAX RULES:
+1. Start with exactly: graph TD
+2. Use 4 spaces for indentation (NOT tabs)
+3. Each node and connection on separate line
+4. Node IDs must be simple: A, B, C1, Node2 (no spaces)
+5. Node text in brackets: A[Short Text]
+6. Arrow format: A --> B or A -->|label| B
+7. NEVER use multiple spaces inside node text
+8. Keep node text under 40 characters
+
+Correct syntax example:
 \`\`\`mermaid
 graph TD
-    A[Concept A] --> B[Concept B]
-    B --> C{Decision Point}
-    C -->|Yes| D[Outcome 1]
-    C -->|No| E[Outcome 2]
-    D --> F[Final Result]
-    E --> F
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Process A]
+    B -->|No| D[Process B]
+    C --> E[End]
+    D --> E
 \`\`\`
 
-Styles:
-- Use [] for processes/concepts
-- Use {} for decision points
-- Use () for inputs/outputs
-- Use --> for flow direction
-- Label arrows with relationships
+Create a clear flow diagram with:
+- Start and end nodes
+- Key decision points using {}
+- Process steps using []
+- Proper flow arrows -->
 
-Create a clear, hierarchical flow diagram representing the discussion structure.
-
-Output ONLY the mermaid code block.`;
+Output ONLY the mermaid code block, nothing else.`;
                 break;
                 
             case 'presentation':
@@ -537,21 +606,46 @@ Break into 3 segments, each containing:
                 })
             });
             
-            const data = await res.json();
-            const content = data.raw || data.response || 'Generation failed.';
+            // Check HTTP status
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
             
-            setActiveToolResult({ type: toolType, content, title });
+            const data = await res.json();
+            console.log('[Studio Tools] API Response:', data); // Debug logging
+            
+            // Fix: Backend returns "result" field, not "raw" or "response"
+            const content = data.result || data.raw || data.response || data.content || 'Generation failed.';
+            
+            const newResult = { 
+                type: toolType, 
+                content, 
+                title,
+                id: Date.now().toString(),
+                timestamp: Date.now()
+            };
+            
+            setActiveToolResult(newResult);
+            setEditedContent(content); // Initialize edited content
+            
+            // Save to history
+            const updatedHistory = [newResult, ...studioHistory].slice(0, 20); // Keep last 20
+            setStudioHistory(updatedHistory);
+            localStorage.setItem('phantom_studio_history', JSON.stringify(updatedHistory));
+            
             playSfx('rankup');
         } catch (e) {
             console.error('Tool generation failed:', e);
+            const errorMessage = e instanceof Error ? e.message : 'Unknown error';
             setActiveToolResult({ 
                 type: toolType, 
-                content: 'Failed to generate content. Please try again.', 
+                content: `Failed to generate content.\n\nError: ${errorMessage}\n\nPlease check:\n1. Backend is running on port 8002\n2. DeepSeek API key is configured\n3. Network connection is stable`, 
                 title 
             });
             playSfx('cancel');
         } finally {
             setIsGeneratingTool(false);
+            setGeneratingToolInfo(null);
         }
     };
     
@@ -590,6 +684,17 @@ Break into 3 segments, each containing:
                 console.error('Failed to load history:', e);
             }
         }
+        
+        // Load Studio history
+        const savedStudio = localStorage.getItem('phantom_studio_history');
+        if (savedStudio) {
+            try {
+                const parsed = JSON.parse(savedStudio);
+                setStudioHistory(parsed);
+            } catch (e) {
+                console.error('Failed to load studio history:', e);
+            }
+        }
     }, []);
     
     // Message operations
@@ -604,6 +709,99 @@ Break into 3 segments, each containing:
         playSfx('cancel');
         setMessageMenuOpen(null);
     };
+    
+    // Studio tool operations
+    const handleEditTool = () => {
+        setIsEditingTool(true);
+        if (activeToolResult) {
+            setEditedContent(activeToolResult.content);
+        }
+        playSfx('click');
+    };
+    
+    const handleSaveEdit = () => {
+        if (activeToolResult) {
+            const updated = { ...activeToolResult, content: editedContent };
+            setActiveToolResult(updated);
+            
+            // Update history  
+            const updatedHistory = studioHistory.map(item => 
+                item.id === updated.id ? { ...updated, id: updated.id!, timestamp: updated.timestamp! } : item
+            );
+            setStudioHistory(updatedHistory);
+            localStorage.setItem('phantom_studio_history', JSON.stringify(updatedHistory));
+            
+            setIsEditingTool(false);
+            playSfx('confirm');
+        }
+    };
+    
+    const handleCancelEdit = () => {
+        setIsEditingTool(false);
+        if (activeToolResult) {
+            setEditedContent(activeToolResult.content);
+        }
+        playSfx('cancel');
+    };
+    
+    const handleToggleFullscreen = () => {
+        setIsToolFullscreen(!isToolFullscreen);
+        playSfx('click');
+    };
+    
+    const handleLoadStudioHistory = (item: typeof studioHistory[0]) => {
+        setActiveToolResult(item);
+        setEditedContent(item.content);
+        setShowStudioHistory(false);
+        playSfx('click');
+    };
+    
+    const handleDeleteStudioHistory = (id: string) => {
+        const updated = studioHistory.filter(item => item.id !== id);
+        setStudioHistory(updated);
+        localStorage.setItem('phantom_studio_history', JSON.stringify(updated));
+        playSfx('cancel');
+    };
+    
+    // Keyboard shortcuts for tool modal
+    useEffect(() => {
+        if (!activeToolResult) return;
+        
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Esc to close
+            if (e.key === 'Escape') {
+                if (isEditingTool) {
+                    handleCancelEdit();
+                } else if (isToolFullscreen) {
+                    setIsToolFullscreen(false);
+                } else {
+                    setActiveToolResult(null);
+                }
+            }
+            // E to edit (when not editing)
+            else if (e.key === 'e' && !isEditingTool && !e.ctrlKey && !e.metaKey) {
+                const activeElement = document.activeElement;
+                if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+                    handleEditTool();
+                }
+            }
+            // F to fullscreen
+            else if (e.key === 'f' && !isEditingTool && !e.ctrlKey && !e.metaKey) {
+                const activeElement = document.activeElement;
+                if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+                    handleToggleFullscreen();
+                }
+            }
+            // Ctrl/Cmd + S to save edit
+            else if ((e.ctrlKey || e.metaKey) && e.key === 's' && isEditingTool) {
+                e.preventDefault();
+                handleSaveEdit();
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeToolResult, isEditingTool, isToolFullscreen, editedContent]);
     
     // Handle file upload
     const handleFileUpload = async (files: FileList) => {
@@ -1269,7 +1467,7 @@ Break into 3 segments, each containing:
                                                             return (
                                                                 <span 
                                                                     key={i}
-                                                                    className="inline-block mx-1 px-2 py-0.5 text-xs font-bold cursor-pointer bg-phantom-red/80 text-white border border-gray-700 hover:bg-phantom-red hover:scale-110 transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.3)]"
+                                                                    className="inline-block mx-1 px-2.5 py-1 text-xs font-black cursor-pointer bg-phantom-red text-white border-2 border-phantom-yellow/60 hover:bg-phantom-yellow hover:text-black hover:border-phantom-red hover:scale-125 transition-all duration-200 shadow-[3px_3px_0px_rgba(0,0,0,0.4)] hover:shadow-[5px_5px_0px_rgba(252,236,12,0.6)] relative group"
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         handleCitationClick(citation);
@@ -1280,9 +1478,11 @@ Break into 3 segments, each containing:
                                                                     }}
                                                                     onMouseEnter={(e) => handleCitationHover(citation, e)}
                                                                     onMouseLeave={handleCitationLeave}
-                                                                    title={`Click: Split View | Double-click: Full Page`}
+                                                                    title={`Hover: Preview | Click: Split View | Double-click: Full Page`}
                                                                 >
-                                                                    {part}
+                                                                    {/* 光晕效果 */}
+                                                                    <span className="absolute inset-0 bg-phantom-yellow/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                    <span className="relative z-10">{part}</span>
                                                                 </span>
                                                             );
                                                         }
@@ -1519,18 +1719,32 @@ Break into 3 segments, each containing:
                 {/* Section Label */}
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between">
                     <div className="bg-gray-800 border border-gray-700 px-3 py-1.5 shadow-[2px_2px_0px_rgba(230,0,18,0.15)] inline-block">
-                        <span className="text-white font-black text-xs uppercase tracking-widest">HISTORY</span>
+                        <span className="text-white font-black text-xs uppercase tracking-widest">
+                            {showStudioHistory ? 'STUDIO HISTORY' : 'CHAT HISTORY'}
+                        </span>
                     </div>
-                    <button
-                        onClick={handleSaveToHistory}
-                        className="p-1.5 bg-phantom-red/80 hover:bg-phantom-red border border-gray-700 transition-colors"
-                        title="Save conversation"
-                    >
-                        <Plus size={14} className="text-white" />
-                    </button>
+                    <div className="flex gap-1">
+                        <button
+                            onClick={() => setShowStudioHistory(!showStudioHistory)}
+                            className={`p-1.5 border border-gray-700 transition-colors ${
+                                showStudioHistory ? 'bg-phantom-red/80' : 'bg-gray-800 hover:bg-gray-700'
+                            }`}
+                            title="Toggle Studio History"
+                        >
+                            <History size={14} className="text-white" />
+                        </button>
+                        <button
+                            onClick={handleSaveToHistory}
+                            className="p-1.5 bg-phantom-red/80 hover:bg-phantom-red border border-gray-700 transition-colors"
+                            title="Save conversation"
+                        >
+                            <Plus size={14} className="text-white" />
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Recent Notes - Real History */}
+                {!showStudioHistory ? (
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
                     {chatHistory.length === 0 ? (
                         <div className="text-center py-8 text-gray-500 text-xs">
@@ -1571,6 +1785,53 @@ Break into 3 segments, each containing:
                         ))
                     )}
                 </div>
+                ) : (
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
+                    {studioHistory.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-xs">
+                            NO STUDIO RESULTS
+                        </div>
+                    ) : (
+                        studioHistory.map((item) => (
+                            <motion.div 
+                                key={item.id}
+                                whileHover={{ x: -2, y: -2 }}
+                                onClick={() => handleLoadStudioHistory(item)}
+                                className="bg-[#0a0a0a] border border-gray-700 p-3 cursor-pointer relative shadow-[3px_3px_0px_rgba(255,255,255,0.03)] hover:shadow-[4px_4px_0px_rgba(230,0,18,0.1)] hover:border-gray-600 transition-all group"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-px bg-phantom-red/40" />
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-6 h-6 border border-gray-700 flex items-center justify-center shadow-[2px_2px_0px_rgba(0,0,0,0.2)] ${
+                                            item.type === 'mindmap' || item.type === 'infomap' ? 'bg-green-500/80' : 
+                                            item.type === 'report' ? 'bg-blue-500/80' : 
+                                            item.type === 'flashcards' ? 'bg-yellow-500/80' : 'bg-purple-500/80'
+                                        }`}>
+                                            <Sparkles size={12} className="text-white" />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-white">
+                                            {item.type}
+                                        </span>
+                                    </div>
+                                    <div 
+                                        className="w-6 h-6 border border-gray-700 bg-[#0a0a0a] flex items-center justify-center group-hover:bg-phantom-red/20 transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteStudioHistory(item.id);
+                                        }}
+                                    >
+                                        <X size={12} className="text-gray-500" />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-300 truncate">{item.title}</p>
+                                <p className="text-[10px] text-gray-500 mt-1">
+                                    {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString()}
+                                </p>
+                            </motion.div>
+                        ))
+                    )}
+                </div>
+                )}
                 
                 {/* Bottom Accent - Softer */}
                 <div className="h-1 bg-gradient-to-r from-phantom-red/30 via-gray-700 to-phantom-red/30" />
@@ -1583,61 +1844,194 @@ Break into 3 segments, each containing:
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
-                        onClick={() => setActiveToolResult(null)}
+                        className={`${isToolFullscreen ? 'fixed' : 'absolute'} inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center ${isToolFullscreen ? 'p-0' : 'p-8'}`}
+                        onClick={() => !isEditingTool && setActiveToolResult(null)}
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }}
                             animate={{ scale: 1, y: 0 }}
                             exit={{ scale: 0.9, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-[#0f0f0f] border-2 border-phantom-red/50 shadow-[8px_8px_0px_rgba(230,0,18,0.2)] max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+                            className={`bg-[#0f0f0f] border-2 border-phantom-red/50 shadow-[8px_8px_0px_rgba(230,0,18,0.2)] ${
+                                isToolFullscreen ? 'w-screen h-screen max-w-none max-h-none' : 'max-w-6xl w-full max-h-[85vh]'
+                            } overflow-hidden flex flex-col`}
                         >
-                            {/* Modal Header */}
+                            {/* Enhanced Modal Header */}
                             <div className="p-4 border-b-2 border-gray-800 flex items-center justify-between bg-black">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-phantom-red/90 border border-gray-700 flex items-center justify-center shadow-[3px_3px_0px_rgba(0,0,0,0.3)]">
                                         <Sparkles className="text-white" size={20} />
                                     </div>
-                                    <h3 className="text-xl font-black uppercase tracking-wider text-gray-100">{activeToolResult.title}</h3>
+                                    <div>
+                                        <h3 className="text-xl font-black uppercase tracking-wider text-gray-100">{activeToolResult.title}</h3>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {new Date(activeToolResult.timestamp || Date.now()).toLocaleString()}
+                                            {isEditingTool && <span className="ml-2 text-phantom-yellow">• EDITING</span>}
+                                        </p>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(activeToolResult.content);
-                                            playSfx('confirm');
-                                        }}
-                                        className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
-                                        title="Copy to clipboard"
-                                    >
-                                        <Copy size={16} className="text-gray-300" />
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            const blob = new Blob([activeToolResult.content], { type: 'text/markdown' });
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
-                                            a.href = url;
-                                            a.download = `${activeToolResult.type}_${Date.now()}.md`;
-                                            a.click();
-                                            playSfx('confirm');
-                                        }}
-                                        className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
-                                        title="Download as Markdown"
-                                    >
-                                        <Download size={16} className="text-gray-300" />
-                                    </button>
+                                    {/* Edit Mode Toggle */}
+                                    {!isEditingTool ? (
+                                        <>
+                                            <button
+                                                onClick={handleEditTool}
+                                                className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors group"
+                                                title="Edit (E)"
+                                            >
+                                                <Edit3 size={16} className="text-gray-300 group-hover:text-phantom-yellow" />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(activeToolResult.content);
+                                                    playSfx('confirm');
+                                                }}
+                                                className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
+                                                title="Copy to clipboard"
+                                            >
+                                                <Copy size={16} className="text-gray-300" />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const blob = new Blob([activeToolResult.content], { type: 'text/markdown' });
+                                                    const url = URL.createObjectURL(blob);
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    a.download = `${activeToolResult.type}_${Date.now()}.md`;
+                                                    a.click();
+                                                    playSfx('confirm');
+                                                }}
+                                                className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
+                                                title="Download as Markdown"
+                                            >
+                                                <Download size={16} className="text-gray-300" />
+                                            </button>
+                                            <button
+                                                onClick={handleToggleFullscreen}
+                                                className={`p-2 border border-gray-700 transition-colors ${
+                                                    isToolFullscreen ? 'bg-phantom-red text-white' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                                                }`}
+                                                title={isToolFullscreen ? "Exit Fullscreen (F)" : "Fullscreen (F)"}
+                                            >
+                                                {isToolFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={handleSaveEdit}
+                                                className="px-4 py-2 bg-green-600 hover:bg-green-500 border border-green-700 transition-colors flex items-center gap-2"
+                                                title="Save (Ctrl+S)"
+                                            >
+                                                <Save size={16} className="text-white" />
+                                                <span className="text-white font-bold text-sm">SAVE</span>
+                                            </button>
+                                            <button
+                                                onClick={handleCancelEdit}
+                                                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 transition-colors flex items-center gap-2"
+                                                title="Cancel (Esc)"
+                                            >
+                                                <XCircle size={16} className="text-gray-300" />
+                                                <span className="text-gray-300 font-bold text-sm">CANCEL</span>
+                                            </button>
+                                        </>
+                                    )}
                                     <button
                                         onClick={() => setActiveToolResult(null)}
                                         className="p-2 bg-phantom-red/80 hover:bg-phantom-red border border-gray-700 transition-colors"
+                                        title="Close (Esc)"
                                     >
                                         <X size={16} className="text-white" />
                                     </button>
                                 </div>
                             </div>
                             
-                            {/* Modal Content */}
-                            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                            {/* Modal Content - Dual Pane in Edit Mode */}
+                            {isEditingTool ? (
+                                <div className="flex-1 flex overflow-hidden">
+                                    {/* Left Pane: Editor */}
+                                    <div className="w-1/2 border-r-2 border-gray-800 flex flex-col">
+                                        <div className="p-3 bg-gray-900 border-b-2 border-gray-800">
+                                            <h4 className="text-xs font-black uppercase tracking-wider text-phantom-yellow">EDITOR</h4>
+                                        </div>
+                                        <textarea
+                                            value={editedContent}
+                                            onChange={(e) => setEditedContent(e.target.value)}
+                                            className="flex-1 bg-[#0a0a0a] text-gray-300 p-6 font-mono text-sm resize-none focus:outline-none custom-scrollbar"
+                                            placeholder="Edit your content here..."
+                                            spellCheck={false}
+                                        />
+                                    </div>
+                                    {/* Right Pane: Live Preview */}
+                                    <div className="w-1/2 flex flex-col">
+                                        <div className="p-3 bg-gray-900 border-b-2 border-gray-800">
+                                            <h4 className="text-xs font-black uppercase tracking-wider text-phantom-yellow">PREVIEW</h4>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                                            {(() => {
+                                                const isMermaidTool = activeToolResult.type === 'mindmap' || activeToolResult.type === 'infomap';
+                                                const mermaidMatch = editedContent.match(/```mermaid\n([\s\S]*?)\n```/);
+                                                
+                                                if (isMermaidTool && mermaidMatch) {
+                                                    const mermaidCode = mermaidMatch[1];
+                                                    const otherContent = editedContent.replace(/```mermaid\n[\s\S]*?\n```/, '').trim();
+                                                    
+                                                    return (
+                                                        <div className="space-y-6">
+                                                            <MermaidDiagram chart={mermaidCode} />
+                                                            {otherContent && (
+                                                                <div className="prose prose-invert max-w-none">
+                                                                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                                                        {otherContent}
+                                                                    </ReactMarkdown>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <div className="prose prose-invert max-w-none">
+                                                            <ReactMarkdown
+                                                                remarkPlugins={[remarkMath]}
+                                                                rehypePlugins={[rehypeKatex]}
+                                                                components={{
+                                                                    h1: ({children}) => <h1 className="text-2xl font-black uppercase text-phantom-red mb-4 border-b-2 border-phantom-red/30 pb-2">{children}</h1>,
+                                                                    h2: ({children}) => <h2 className="text-xl font-bold uppercase text-gray-100 mt-6 mb-3">{children}</h2>,
+                                                                    h3: ({children}) => <h3 className="text-lg font-bold text-gray-200 mt-4 mb-2">{children}</h3>,
+                                                                    p: ({children}) => <p className="text-gray-300 mb-3 leading-relaxed">{children}</p>,
+                                                                    ul: ({children}) => <ul className="list-none space-y-2 my-4">{children}</ul>,
+                                                                    li: ({children}) => (
+                                                                        <li className="flex items-start gap-3 text-gray-300">
+                                                                            <span className="text-phantom-red/80 font-black mt-1">▸</span>
+                                                                            <span>{children}</span>
+                                                                        </li>
+                                                                    ),
+                                                                    strong: ({children}) => <strong className="text-phantom-yellow/90 font-bold">{children}</strong>,
+                                                                    code: ({className, children, ...props}) => {
+                                                                        const match = /language-(\w+)/.exec(className || '')
+                                                                        return match ? (
+                                                                            <code className={`${className} bg-black/50 text-green-400 p-3 block overflow-x-auto my-3 border-l-2 border-phantom-red/60 font-mono`} {...props}>
+                                                                                {children}
+                                                                            </code>
+                                                                        ) : (
+                                                                            <code className="bg-black/50 text-phantom-yellow/90 px-2 py-1 font-mono text-sm" {...props}>
+                                                                                {children}
+                                                                            </code>
+                                                                        )
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {editedContent}
+                                                            </ReactMarkdown>
+                                                        </div>
+                                                    );
+                                                }
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                                 {/* Detect and render Mermaid diagrams for mindmap/infomap tools */}
                                 {(() => {
                                     const isMermaidTool = activeToolResult.type === 'mindmap' || activeToolResult.type === 'infomap';
@@ -1732,6 +2126,18 @@ Break into 3 segments, each containing:
                                     }
                                 })()}
                             </div>
+                            )}
+                            
+                            {/* Keyboard Shortcuts Hint */}
+                            {!isEditingTool && (
+                                <div className="p-3 bg-gray-900 border-t-2 border-gray-800">
+                                    <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+                                        <span><kbd className="px-2 py-1 bg-gray-800 border border-gray-700 rounded">E</kbd> Edit</span>
+                                        <span><kbd className="px-2 py-1 bg-gray-800 border border-gray-700 rounded">F</kbd> Fullscreen</span>
+                                        <span><kbd className="px-2 py-1 bg-gray-800 border border-gray-700 rounded">Esc</kbd> Close</span>
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     </motion.div>
                 )}
@@ -1790,12 +2196,67 @@ Break into 3 segments, each containing:
                         </div>
                         
                         {/* PDF Viewer */}
-                        <div className="flex-1 overflow-auto bg-gray-900 p-4 flex items-center justify-center">
-                            <iframe
-                                src={`/api/papers/${splitViewPdf.paperId}/pdf#page=${splitViewPdf.page}`}
-                                className="w-full h-full border-2 border-gray-700"
-                                title="PDF Preview"
-                            />
+                        <div className="flex-1 overflow-auto bg-gray-900 p-4 flex flex-col items-center justify-center">
+                            <div className="w-full h-full flex flex-col">
+                                {/* Page Navigation */}
+                                <div className="bg-[#0a0a0a] border-b border-gray-700 p-2 flex items-center justify-center gap-4">
+                                    <button
+                                        onClick={() => {
+                                            if (splitViewPdf.page > 1) {
+                                                setSplitViewPdf({ ...splitViewPdf, page: splitViewPdf.page - 1 });
+                                                playSfx('click');
+                                            }
+                                        }}
+                                        disabled={splitViewPdf.page <= 1}
+                                        className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs font-bold"
+                                    >
+                                        ← PREV
+                                    </button>
+                                    <span className="text-white font-bold text-sm">
+                                        Page {splitViewPdf.page}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            setSplitViewPdf({ ...splitViewPdf, page: splitViewPdf.page + 1 });
+                                            playSfx('click');
+                                        }}
+                                        className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 transition-colors text-xs font-bold"
+                                    >
+                                        NEXT →
+                                    </button>
+                                </div>
+                                
+                                {/* PDF iframe with proper page parameter */}
+                                <iframe
+                                    key={`${splitViewPdf.paperId}-${splitViewPdf.page}`}
+                                    src={`/api/papers/${splitViewPdf.paperId}/pdf#page=${splitViewPdf.page}&view=FitH`}
+                                    className="w-full flex-1 border-2 border-gray-700 bg-gray-800"
+                                    title="PDF Preview"
+                                    onLoad={(e) => {
+                                        // Try to navigate to the correct page using PDF.js API
+                                        try {
+                                            const iframe = e.target as HTMLIFrameElement;
+                                            const iframeWindow = iframe.contentWindow;
+                                            if (iframeWindow) {
+                                                // Wait a bit for PDF.js to initialize
+                                                setTimeout(() => {
+                                                    try {
+                                                        // Try PDF.js API
+                                                        const pdfViewer = (iframeWindow as any).PDFViewerApplication;
+                                                        if (pdfViewer && pdfViewer.pdfViewer) {
+                                                            pdfViewer.pdfViewer.currentPageNumber = splitViewPdf.page;
+                                                        }
+                                                    } catch (err) {
+                                                        console.log('Could not set page via PDFViewerApplication:', err);
+                                                    }
+                                                }, 500);
+                                            }
+                                        } catch (err) {
+                                            console.log('Could not access iframe:', err);
+                                        }
+                                    }}
+                                />
+                            </div>
                         </div>
                         
                         {/* Actions */}
@@ -1820,6 +2281,13 @@ Break into 3 segments, each containing:
                     </motion.div>
                 )}
             </AnimatePresence>
+            
+            {/* Studio Loading Overlay */}
+            <StudioLoadingOverlay
+                isVisible={isGeneratingTool}
+                toolType={generatingToolInfo?.type || ''}
+                toolName={generatingToolInfo?.name || ''}
+            />
         </motion.div>
     );
 }
