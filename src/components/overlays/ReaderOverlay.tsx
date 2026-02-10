@@ -479,7 +479,8 @@ export const ReaderOverlay = ({ paper, onClose, onLevelUp, playSfx, onSaveNote, 
                                                             return (
                                                                 <div key={idx} className={effectClass}>
                                                                     <div 
-                                                                        className="font-serif text-lg leading-loose prose prose-invert max-w-none text-black"
+                                                                        className="font-serif text-lg leading-loose prose max-w-none"
+                                                                        style={{ color: '#000000' }}
                                                                         dangerouslySetInnerHTML={{ __html: formatContent(block.dst) }}
                                                                     />
                                                                 </div>

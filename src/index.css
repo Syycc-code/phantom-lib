@@ -183,9 +183,40 @@ body {
 }
 
 .prose {
-  color: #111; /* 纯黑文字 */
+  color: #000000 !important; /* 强制纯黑文字 */
   line-height: 1.8;
 }
+
+.prose * {
+  color: inherit !important; /* 所有子元素继承黑色 */
+}
+
+.prose strong,
+.prose b {
+  color: #000000 !important; /* 粗体也是纯黑 */
+  font-weight: bold;
+}
+
+.prose h1, 
+.prose h2, 
+.prose h3, 
+.prose h4, 
+.prose h5, 
+.prose h6 {
+  color: #000000 !important; /* 标题纯黑 */
+}
+
+.prose p,
+.prose span,
+.prose div,
+.prose li {
+  color: #000000 !important; /* 所有文本纯黑 */
+}
+
+.prose code {
+  color: #d63384 !important; /* 代码块保持特殊颜色 */
+}
+
 
 /* 强制覆盖 ReaderOverlay 的背景色 */
 .reader-light-mode {

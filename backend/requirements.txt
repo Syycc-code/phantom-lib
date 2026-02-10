@@ -27,7 +27,8 @@ rapidocr_onnxruntime==1.3.24
 # ML & Vector DB (Optional - RAG功能)
 # 如果不需要RAG功能，可以注释掉以下依赖
 onnxruntime==1.19.2
-chromadb==0.4.24
+# chromadb==0.4.24  # 已替换为Pinecone云端方案
+pinecone-client==3.0.0  # 云端向量数据库（免费层100k向量）
 sentence-transformers==3.2.1
 torch==2.5.1
 numpy==1.26.4

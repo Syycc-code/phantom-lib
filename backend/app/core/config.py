@@ -36,6 +36,12 @@ class Settings:
     
     # RAG Control (Emergency Disable)
     ENABLE_RAG: bool = os.getenv("ENABLE_RAG", "true").lower() in ("true", "1", "yes")
+    
+    # Pinecone Cloud Vector Database Config
+    PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "your-pinecone-api-key")
+    PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "phantom-library")
+    PINECONE_CLOUD: str = os.getenv("PINECONE_CLOUD", "aws")  # aws, gcp, or azure
+    PINECONE_REGION: str = os.getenv("PINECONE_REGION", "us-east-1")  # 根据免费层区域调整
 
 settings = Settings()
 
