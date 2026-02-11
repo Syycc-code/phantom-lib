@@ -2,7 +2,7 @@
 
 **Phantom Library** 是一个集成了 DeepSeek 大模型与 RAG（检索增强生成）技术的智能文献管理系统。它结合了现代化的 React 前端与高性能 FastAPI 后端，旨在为研究人员提供高效的论文阅读、管理与分析体验。
 
-![License](https://img.shields.io/badge/license-MIT-blue) ![Version](https://img.shields.io/badge/version-1.2.0-green) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
+![License](https://img.shields.io/badge/license-MIT-blue) ![Version](https://img.shields.io/badge/version-1.2.1-green) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
 
 ---
 
@@ -128,6 +128,28 @@ Phantom Library 内置了自动更新功能。每次运行 `start_phantom.bat` �
 
 ## 📝 更新日志 (Changelog)
 
+### v1.2.1 (2026-02-10)
+#### 🐛 Critical Stability Fixes
+
+##### 关键修复
+- **[严重] 修复RAG索引内存溢出导致崩溃**
+  - 将批处理大小从3降至1以提高稳定性
+  - 添加显式垃圾回收和内存错误处理
+  - 修复后端在大文件索引时自动退出的问题
+
+- **修复文件上传后视图同步问题**
+  - 上传文件后立即显示，无需刷新页面
+  - 从文件夹视图上传时自动切换到全局视图
+  
+- **修复阅读器退出状态清理问题**
+  - 退出阅读器时正确清理选中状态
+  - 消除退出后需要刷新页面的问题
+
+##### 新功能
+- **RAG禁用开关**：新增 `ENABLE_RAG` 配置选项，可在低内存环境下禁用RAG
+- **崩溃诊断工具**：新增 `diagnose_crash.py` 系统资源检查脚本
+- **故障排除文档**：新增 `CRASH_FIX.md` 详细技术文档
+
 ### v1.2.0 (2025-02-10)
 #### 🎉 重大更新：Studio工具箱全面增强
 
@@ -218,4 +240,4 @@ Phantom Library 内置了自动更新功能。每次运行 `start_phantom.bat` �
 
 ---
 
-**License**: MIT | **Version**: 1.2.0
+**License**: MIT | **Version**: 1.2.1
