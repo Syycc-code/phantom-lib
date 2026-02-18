@@ -11,6 +11,15 @@ echo "========================================================"
 echo "[*] Initializing Cognitive Engine..."
 
 if ! command -v npm >/dev/null 2>&1; then
+  NVM_DIR="$HOME/.nvm"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # Load nvm in non-interactive shells so npm/node are available.
+    # shellcheck disable=SC1090
+    source "$NVM_DIR/nvm.sh"
+  fi
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
   echo "[ERROR] npm not found. Please install Node.js first."
   exit 1
 fi
