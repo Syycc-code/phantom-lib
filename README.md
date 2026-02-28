@@ -80,7 +80,21 @@ DEEPSEEK_API_KEY=sk-your-key-here
 *   自动启动后端服务 (Port 8000)
 *   自动启动前端界面 (Port 5173)
 
-### 3. 手动启动 (Linux/Mac)
+### 3. 启动系统 (macOS 一键)
+
+在项目根目录执行：
+
+```bash
+cd /Users/sunchengyu/Documents/GitHub/phantom-lib
+source ~/.nvm/nvm.sh
+./start_phantom_mac.sh
+```
+
+或双击桌面启动脚本：
+
+`/Users/sunchengyu/Desktop/启动Phantom.command`
+
+### 4. 手动启动 (Linux/Mac)
 
 **后端启动：**
 ```bash
@@ -95,7 +109,7 @@ npm install
 npm run dev
 ```
 
-访问地址：http://localhost:5173
+访问地址：http://127.0.0.1:5173
 
 ---
 
