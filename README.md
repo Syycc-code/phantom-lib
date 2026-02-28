@@ -2,7 +2,7 @@
 
 **Phantom Library** 是一个集成了 DeepSeek 大模型与 RAG（检索增强生成）技术的智能文献管理系统。它结合了现代化的 React 前端与高性能 FastAPI 后端，旨在为研究人员提供高效的论文阅读、管理与分析体验。
 
-![License](https://img.shields.io/badge/license-MIT-blue) ![Version](https://img.shields.io/badge/version-1.2.1-green) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
+![License](https://img.shields.io/badge/license-MIT-blue) ![Version](https://img.shields.io/badge/version-1.2.2-green) ![AI](https://img.shields.io/badge/AI-DeepSeek_V3-blue)
 
 ---
 
@@ -142,6 +142,13 @@ Phantom Library 内置了自动更新功能。每次运行 `start_phantom.bat` �
 
 ## 📝 更新日志 (Changelog)
 
+### v1.2.2 (2026-02-28)
+#### 🔧 启动与文档更新
+
+- 新增并优化 macOS 启动脚本 `start_phantom_mac.sh`，默认使用低内存启动配置。
+- 新增桌面一键启动脚本说明：`/Users/sunchengyu/Desktop/启动Phantom.command`。
+- 修复前后端启动说明，统一访问地址为 `http://127.0.0.1:5173`。
+
 ### v1.2.1 (2026-02-10)
 #### 🐛 Critical Stability Fixes
 
@@ -254,4 +261,4 @@ Phantom Library 内置了自动更新功能。每次运行 `start_phantom.bat` �
 
 ---
 
-**License**: MIT | **Version**: 1.2.1
+**License**: MIT | **Version**: 1.2.2
