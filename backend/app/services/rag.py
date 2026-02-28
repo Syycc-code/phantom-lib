@@ -16,7 +16,6 @@ deepseek_client = AsyncOpenAI(
 
 try:
     from pinecone import Pinecone, ServerlessSpec
-    from sentence_transformers import SentenceTransformer
     RAG_AVAILABLE = True
 except ImportError as e:
     print(f"[RAG WARNING] Missing dependencies: {e}. RAG features disabled.")
@@ -28,10 +27,11 @@ _pinecone_client = None
 _pinecone_index = None
 _embedder = None
 _rag_initialized = False
+_sentence_transformer_cls = None
 
 def get_rag_components():
     """初始化RAG组件（Pinecone版本）"""
-    global _pinecone_client, _pinecone_index, _embedder, _rag_initialized, RAG_AVAILABLE
+    global _pinecone_client, _pinecone_index, _embedder, _rag_initialized, RAG_AVAILABLE, _sentence_transformer_cls
     
     if _rag_initialized:
         return _pinecone_client, _pinecone_index, _embedder
@@ -82,6 +82,11 @@ def get_rag_components():
         
         # 3. 加载Embedding模型（仅本地计算embedding）
         try:
+            # Lazy import to avoid heavy torch/sentence-transformers import during server boot.
+            if _sentence_transformer_cls is None:
+                from sentence_transformers import SentenceTransformer
+                _sentence_transformer_cls = SentenceTransformer
+
             print(f"[PHANTOM] Loading Embedding Model (this may take a moment)...")
             os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
             
@@ -89,22 +94,22 @@ def get_rag_components():
             
             try:
                 print(f"[PHANTOM] Loading Embedding Model: {model_name}...")
-                _embedder = SentenceTransformer(model_name, device='cpu')
+                _embedder = _sentence_transformer_cls(model_name, device='cpu')
             except Exception as dl_error:
                 print(f"[PHANTOM] Download Timeout/Error with Mirror: {dl_error}.")
                 print("[PHANTOM] Attempting fallback to local/smaller model...")
                 
                 try:
                     # Fallback 1: Try smaller model
-                    _embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
+                    _embedder = _sentence_transformer_cls('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
                 except:
                     # Fallback 2: Try completely offline mode if model exists in cache
                     print("[PHANTOM] Network failed. Checking local cache only...")
                     try:
-                        _embedder = SentenceTransformer(model_name, device='cpu')
+                        _embedder = _sentence_transformer_cls(model_name, device='cpu')
                     except:
                         # Final fallback: use any available model
-                        _embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                        _embedder = _sentence_transformer_cls('all-MiniLM-L6-v2', device='cpu')
 
             print("[PHANTOM] Embedding Model Loaded.")
         except Exception as e:

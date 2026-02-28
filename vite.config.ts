@@ -11,12 +11,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8002',  // 后端运行在8002端口
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        secure: false,                     // 允许不安全连接
-        ws: true,                          // 支持WebSocket
-        timeout: 300000,                   // 5分钟超时
-        proxyTimeout: 300000,              // 代理超时
+        secure: false,
+        ws: true,
+        timeout: 300000,
+        proxyTimeout: 300000,
       }
     }
   }

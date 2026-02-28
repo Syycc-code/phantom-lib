@@ -185,7 +185,8 @@ async def chat_stream(
             if should_search_web:
                 system_metrics["ai_state"] = "SEARCHING"
                 search_reason = "No local context found" if is_context_empty else "Deep Research enabled"
-                yield f"data: {json.dumps({'content': f'🔍 [{search_reason}] Searching Web...\\n'}, ensure_ascii=False)}\n\n"
+                search_msg = f"🔍 [{search_reason}] Searching Web...\n"
+                yield f"data: {json.dumps({'content': search_msg}, ensure_ascii=False)}\n\n"
                 web_res = await asyncio.to_thread(perform_web_search, request.query)
                 if web_res:
                     final_context += f"\n\n【Web Intel】\n{web_res}"
